@@ -1,0 +1,127 @@
+# --
+# Copyright (c) 2008-2019 Net-ng.
+# All rights reserved.
+#
+# This software is licensed under the BSD License, as described in
+# the file LICENSE.txt, which you should have received as part of
+# this distribution.
+# --
+
+"""Authentication manager for the digest HTTP authentication scheme"""
+
+import os
+import time
+import hashlib
+
+from webob import exc
+
+from . import token_auth
+
+
+class Authentication(token_auth.Authentication):
+    """Authentication manager for the digest HTTP authentication scheme
+    """
+    CONFIG_SPEC = dict(
+        token_auth.Authentication.CONFIG_SPEC,
+        scheme='string(default="Digest")',
+        base64_encoded='boolean(default=False)',
+        realm='string(default="")'
+    )
+
+    def __init__(self, name, dist, realm='', services_service=None, **config):
+        """Initialization
+
+        In:
+          - ``realm`` -- authentication realm
+        """
+        services_service(super(Authentication, self).__init__, name, dist, **config)
+
+        self.realm = realm
+        self.nonce_seed = os.urandom(16)
+
+    def get_principal(self, request, response, **params):
+        """Return the data associated with the connected user
+
+        In:
+          - ``request`` -- the WebOb request object
+          - ``response`` -- the WebOb response object
+
+        Return:
+          - A tuple with the id of the user and all the challenge response parameters
+        """
+        principal, credentials = super(Authentication, self).get_principal(request, response, **params)
+
+        encoding = request.accept_charset.best_match(['iso-8859-1', 'utf-8'])
+
+        if principal is not None:
+            credentials = [x.split('=', 1) for x in principal.split(',')]
+            credentials = {k.lstrip(): v.strip('"') for k, v in credentials}
+            principal = credentials.pop('username', None)
+            credentials['http_method'] = request.method
+            credentials = {k: v.encode(encoding) for k, v in credentials.items()}
+            credentials['encoding'] = encoding
+
+        return principal, credentials
+
+    def authenticate(
+        self,
+        principal, encoding=None, http_method=None,
+        response=None, realm=b'', uri=b'',
+        nonce=b'', nc=b'', cnonce=b'', qop=b'',
+        **data
+    ):
+        """Authentication
+
+        In:
+          - ``username`` -- user id
+          - ``password`` -- real password of the user
+          - ``encoding`` -- encoding of username and password on the client
+          - ``response``, ``realm``, ``uri``, ``nonce``, ``nc``, ``cnonce``,
+            ``qop`` -- elements of the challenge response
+
+        Return:
+          - a boolean
+        """
+        if response is None:
+            # Anonymous user
+            return None
+
+        password = self.get_password(principal).encode(encoding)
+
+        # Make our side hash
+        hda1 = hashlib.md5(b'%s:%s:%s' % (principal.encode(encoding), realm, password)).hexdigest()
+        hda2 = hashlib.md5(http_method + b':' + uri).hexdigest()
+        sig = b'%s:%s:%s:%s:%s:%s' % (hda1.encode(encoding), nonce, nc, cnonce, qop, hda2.encode(encoding))
+
+        # Compare our hash with the response
+        return hashlib.md5(sig).hexdigest().encode(encoding) == response
+
+    def denies(self, detail=None):
+        """Method called when a permission is denied
+
+        In:
+          - ``details`` -- a ``security.common.denial`` object
+        """
+        nonce = hashlib.md5(b'%r:%s' % (time.time(), self.nonce_seed)).hexdigest()
+
+        super(Authentication, self).denies(
+            detail,
+            exc.HTTPUnauthorized,
+            [('WWW-Authenticate', 'Digest realm="{}", nonce="{}", qop="auth"'.format(self.realm, nonce))]
+        )
+
+    # --------------------------------------------------------------------------------
+
+    def get_password(self, principal):
+        raise NotImplementedError()
+
+    def create_user(self, principal):
+        """The user is validated, create the user object
+
+        In:
+          - ``username`` -- the user id
+
+        Return:
+          - the user object
+        """
+        raise NotImplementedError()
