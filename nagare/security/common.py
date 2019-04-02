@@ -76,7 +76,12 @@ class Private(Permission):
 
     Nobody has access to objects protected with this permission
     """
-    pass
+    def __nonzero__(self):
+        """Evaluated to ``False`` in a boolean context
+        """
+        return False
+
+    __bool__ = __nonzero__
 
 
 class Public(Permission):
@@ -109,6 +114,8 @@ class Denial(Exception):
         """Evaluated to ``False`` in a boolean context
         """
         return False
+
+    __bool__ = __nonzero__
 
     def __str__(self):
         return 'security.Denial({})'.format(self.args[0])
