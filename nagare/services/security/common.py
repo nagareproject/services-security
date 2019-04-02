@@ -9,7 +9,7 @@
 # this distribution.
 # --
 
-import webob
+from webob import exc
 from nagare.services import plugin
 
 from nagare.security import set_manager, set_user, Denial, public, private
@@ -45,20 +45,20 @@ class Authentication(plugin.Plugin):
           - ``id`` -- the user id
           - ``**kw`` -- the user credentials
         """
-        user.set_id(id)
+        user.set_id(id, credentials)
 
     def logout(self):
         """Deconnection of the current user
         """
         return None
 
-    def denies(self, detail=None, exc=webob.exc.HTTPForbidden, headers=()):
+    def denies(self, detail=None, exception=exc.HTTPForbidden, headers=()):
         """Method called when a permission is denied
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        raise exc(str('Access forbidden' if detail is None else detail), headers=headers)
+        raise exception(str('Access forbidden' if detail is None else detail), headers=headers)
 
     def handle_request(self, chain, **params):
         set_manager(self)
@@ -66,7 +66,7 @@ class Authentication(plugin.Plugin):
 
         return chain.next(**params)
 
-    def has_permission(self, user, perms, subject, message=None):
+    def has_permissions(self, user, perms, subject, message=None):
         """The ``has_permission()`` generic method
         and default implementation: by default all accesses are denied
 
@@ -79,17 +79,23 @@ class Authentication(plugin.Plugin):
           - True if the access is granted
           - Else a ``security.common.Denial`` object
         """
-        # Everybody has access to an object protected with the ``public`` permission
-        if perms is public:
-            return True
+        # If several permissions are to be checked, the access must be granted for at least one permission
+        if isinstance(perms, (tuple, list, set)):
+            has_permissions = any(self.has_permissions(user, perm, subject, message) for perm in perms)
+        else:
+            if perms is public:
+                # Everybody has access to an object protected with the ``public`` permission
+                has_permissions = True
+            elif perms is private:
+                # Nobody has access to an object protected with the ``private`` permission
+                has_permissions = False
+            else:
+                has_permissions = self.has_permission(user, perms, subject)
 
-        if perms is not private:
-            # If several permissions are to be checked, the access must be granted for at least one permission
-            if isinstance(perms, (tuple, list, set)):
-                if any(self.has_permission(user, perm, subject) for perm in perms):
-                    return True
+        return has_permissions or Denial(message)
 
-        return Denial(message)
+    def has_permission(self, user, perm, subject):
+        return False
 
     # --------------------------------------------------------------------------------
 
@@ -105,7 +111,7 @@ class Authentication(plugin.Plugin):
         """
         raise NotImplementedError()
 
-    def authenticate(self, principal, **crendentials):
+    def authenticate(self, principal, **credentials):
         raise NotImplementedError()
 
     def create_user(self, principal):
