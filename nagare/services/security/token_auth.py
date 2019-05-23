@@ -10,6 +10,7 @@
 """Authentication manager for the basic HTTP authentication scheme"""
 
 import binascii
+from webob import exc
 
 from . import common
 
@@ -29,35 +30,44 @@ class Authentication(common.Authentication):
         self.scheme = scheme
         self.base64_encoded = base64_encoded
 
-    def get_principal(self, request, response, **params):
+    def get_principal(self, request, **params):
         """Return the data associated with the connected user
 
         In:
           - ``request`` -- the WebOb request object
-          - ``response`` -- the WebOb response object
 
         Return:
           - A list with the id of the user and its password
         """
-        encoding = request.accept_charset.best_match(['iso-8859-1', 'utf-8'])
-
         principal = None  # Anonymous user by default
 
         authorization = request.headers.get('authorization', '')
         if ' ' in authorization:
-            scheme, principal = authorization.split(' ', 1)
+            scheme, received_principal = authorization.split(' ', 1)
             if scheme == self.scheme:
-                try:
-                    if self.base64_encoded:
-                        principal = binascii.a2b_base64(principal).decode(encoding)
-                except (binascii.Error, UnicodeDecodeError):
-                    principal = None
+                if not self.base64_encoded:
+                    principal = received_principal
+                else:
+                    encoding = request.accept_charset.best_match(['iso-8859-1', 'utf-8'])
+
+                    try:
+                        principal = binascii.a2b_base64(received_principal).decode(encoding)
+                    except (binascii.Error, UnicodeDecodeError):
+                        pass
 
         return principal, {}
 
+    def denies(self, detail=None, exception=exc.HTTPForbidden, headers=(), **params):
+        """Method called when a permission is denied
+
+        In:
+          - ``detail`` -- a ``security.common.denial`` object
+        """
+        super(Authentication, self).denies(detail, exception, headers=headers, **params)
+
     # --------------------------------------------------------------------------------
 
-    def authenticate(self, token):
+    def authenticate_user(self, token):
         raise NotImplementedError()
 
     def create_user(self, token):

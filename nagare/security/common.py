@@ -12,6 +12,13 @@
 from nagare import local
 
 
+__all__ = (
+    'get_manager', 'set_manager', 'get_user', 'set_user',
+    'SecurityException', 'has_permissions', 'check_permissions', 'permissions',
+    'User', 'Permission', 'Private', 'Public', 'private', 'public', 'Denial'
+)
+
+
 def get_manager():
     return getattr(local.request, 'manager', None)
 
@@ -28,25 +35,39 @@ def get_user(only_valid=True):
 def set_user(user):
     local.request.user = user
 
+
+class SecurityException(Exception):
+    pass
+
+# ---------------------------------------------------------------------------
+
+
+def has_permissions(permissions, subject=None, message=None):
+    return get_manager().has_permissions(get_user(), permissions, subject, message)
+
+
+def check_permissions(permissions, subject=None, message=None):
+    has_permission = has_permissions(permissions, subject, message)
+    return has_permission or get_manager().denies(None if has_permission is False else has_permission)
+
+
+def permissions(permissions, subject=None, message=None):
+    return lambda f: lambda *args, **kw: check_permissions(permissions, subject, message) and f(*args, **kw)
+
 # ---------------------------------------------------------------------------
 
 
 class User(object):
     """Base class for the user objects
     """
-    def __init__(self, id=None, *args):
+    def __init__(self, id=None, **credentials):
         self.id = id
-        self.credentials = args
+        self.credentials = credentials
+
         self.is_expired = False
-
+        self.delete_session = False
+        self.logout_location = None
         self._previous_user = None
-
-    def set_id(self, id, *args):
-        self.id = id
-        self.credentials = args
-
-    def get_id(self):
-        return (self.id,) + self.credentials
 
     def __enter__(self):
         """Push this user to the stack
@@ -58,6 +79,9 @@ class User(object):
         """Pop this user from the stack
         """
         set_user(self._previous_user)
+
+    def __repr__(self):
+        return '<User {}>'.format(self.id)
 
 # ---------------------------------------------------------------------------
 
@@ -97,7 +121,7 @@ private = Private()
 public = Public()
 
 
-class Denial(Exception):
+class Denial(object):
     """Type of the objects return when an access is denied
 
     In a boolean context, it is evaluated to ``False``
@@ -108,7 +132,7 @@ class Denial(Exception):
         In:
           - ``message`` -- denial description
         """
-        super(Denial, self).__init__('Access forbidden' if detail is None else detail)
+        self.detail = 'Access forbidden' if detail is None else detail
 
     def __nonzero__(self):
         """Evaluated to ``False`` in a boolean context
@@ -118,4 +142,4 @@ class Denial(Exception):
     __bool__ = __nonzero__
 
     def __str__(self):
-        return 'security.Denial({})'.format(self.args[0])
+        return 'security.Denial({})'.format(self.detail)

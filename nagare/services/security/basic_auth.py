@@ -32,17 +32,13 @@ class Authentication(token_auth.Authentication):
         services_service(super(Authentication, self).__init__, name, dist, **config)
         self.realm = realm
 
-    def get_principal(self, request, response, **params):
+    def get_principal(self, **params):
         """Return the data associated with the connected user
-
-        In:
-          - ``request`` -- the WebOb request object
-          - ``response`` -- the WebOb response object
 
         Return:
           - A list with the id of the user and its password
         """
-        principal, credentials = super(Authentication, self).get_principal(request, response, **params)
+        principal, credentials = super(Authentication, self).get_principal(**params)
 
         if (principal is not None) and (principal.count(':') == 1):
             principal, password = principal.split(':')
@@ -50,8 +46,8 @@ class Authentication(token_auth.Authentication):
 
         return principal, credentials
 
-    def authenticate(self, principal, password):
-        return password == self.get_password(principal)
+    def authenticate_user(self, principal, password):
+        return password == self.get_user_password(principal)
 
     def denies(self, detail=None):
         """Method called when a permission is denied
@@ -67,10 +63,10 @@ class Authentication(token_auth.Authentication):
 
     # --------------------------------------------------------------------------------
 
-    def get_password(self, principal):
+    def get_user_password(self, principal):
         raise NotImplementedError()
 
-    def create_user(self, principal):
+    def create_user(self, principal, **credentials):
         """The user is validated, create the user object
 
         In:

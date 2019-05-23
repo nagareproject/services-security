@@ -49,7 +49,7 @@ class Authentication(token_auth.Authentication):
         Return:
           - A tuple with the id of the user and all the challenge response parameters
         """
-        principal, credentials = super(Authentication, self).get_principal(request, response, **params)
+        principal, credentials = super(Authentication, self).get_principal(request=request, **params)
 
         encoding = request.accept_charset.best_match(['iso-8859-1', 'utf-8'])
 
@@ -63,9 +63,9 @@ class Authentication(token_auth.Authentication):
 
         return principal, credentials
 
-    def authenticate(
+    def authenticate_user(
         self,
-        principal, encoding=None, http_method=None,
+        principal, encoding, http_method,
         response=None, realm=b'', uri=b'',
         nonce=b'', nc=b'', cnonce=b'', qop=b'',
         **data
@@ -84,9 +84,9 @@ class Authentication(token_auth.Authentication):
         """
         if response is None:
             # Anonymous user
-            return None
+            return False
 
-        password = self.get_password(principal).encode(encoding)
+        password = self.get_user_password(principal).encode(encoding)
 
         # Make our side hash
         hda1 = hashlib.md5(b'%s:%s:%s' % (principal.encode(encoding), realm, password)).hexdigest()
@@ -112,10 +112,10 @@ class Authentication(token_auth.Authentication):
 
     # --------------------------------------------------------------------------------
 
-    def get_password(self, principal):
+    def get_user_password(self, principal):
         raise NotImplementedError()
 
-    def create_user(self, principal):
+    def create_user(self, principal, **crendentials):
         """The user is validated, create the user object
 
         In:

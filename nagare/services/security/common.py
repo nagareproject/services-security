@@ -9,10 +9,9 @@
 # this distribution.
 # --
 
-from webob import exc
 from nagare.services import plugin
 
-from nagare.security import set_manager, set_user, Denial, public, private
+from nagare.security import set_manager, set_user, SecurityException, Denial, public, private
 
 
 class Authentication(plugin.Plugin):
@@ -23,46 +22,33 @@ class Authentication(plugin.Plugin):
         By definition, the user object ``None`` is the anonymous user
     """
 
-    def check_user(self, **params):
-        """Check the user is valid and create it
+    def authenticate_and_create_user(self, **params):
+        """Check if the user is valid and create it
         """
         # Retrieve the data associated with the connected user
         principal, credentials = self.get_principal(**params)
 
-        if (principal is None) or not self.authenticate(principal, **credentials):
+        if (principal is None) or not self.authenticate_user(principal, **credentials):
             user = None
         else:
-            user = self.create_user(principal)
-            self.set_user_id(user, principal, **credentials)
+            user = self.create_user(principal, **credentials)
+            user.credentials.setdefault('principal', principal)
+            for k, v in credentials.items():
+                user.credentials.setdefault(k, v)
 
         return user
 
-    def set_user_id(self, user, id, **credentials):
-        """Set the credentials of the user
-
-        In:
-          - ``user`` -- the user
-          - ``id`` -- the user id
-          - ``**kw`` -- the user credentials
-        """
-        user.set_id(id, credentials)
-
-    def logout(self):
-        """Deconnection of the current user
-        """
-        return None
-
-    def denies(self, detail=None, exception=exc.HTTPForbidden, headers=()):
+    def denies(self, detail=None, exception=SecurityException, **params):
         """Method called when a permission is denied
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        raise exception(str('Access forbidden' if detail is None else detail), headers=headers)
+        raise exception(str('Access forbidden' if detail is None else detail), **params)
 
     def handle_request(self, chain, **params):
         set_manager(self)
-        set_user(self.check_user(**params))
+        set_user(self.authenticate_and_create_user(**params))
 
         return chain.next(**params)
 
@@ -107,18 +93,18 @@ class Authentication(plugin.Plugin):
           - ``response`` -- the web response object
 
         Return:
-          - A tuple with the id of the user and a dictionary of its data
+          - A tuple with the principal (id) of the user and a dictionary of its credentials
         """
         raise NotImplementedError()
 
-    def authenticate(self, principal, **credentials):
+    def authenticate_user(self, principal, **credentials):
         raise NotImplementedError()
 
-    def create_user(self, principal):
+    def create_user(self, principal, **credentials):
         """The user is validated, create the user object
 
         In:
-          - ``username`` -- the user id
+          - ``principal`` -- the user principal (id)
 
         Return:
           - the user object
