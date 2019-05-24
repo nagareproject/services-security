@@ -13,8 +13,6 @@ import os
 import time
 import hashlib
 
-from webob import exc
-
 from . import token_auth
 
 
@@ -96,19 +94,24 @@ class Authentication(token_auth.Authentication):
         # Compare our hash with the response
         return hashlib.md5(sig).hexdigest().encode(encoding) == response
 
-    def denies(self, detail=None):
+    def fails(self, body=None, content_type='application/html; charset=utf-8', **params):
         """Method called when a permission is denied
 
         In:
           - ``details`` -- a ``security.common.denial`` object
         """
         nonce = hashlib.md5(b'%r:%s' % (time.time(), self.nonce_seed)).hexdigest()
+        headers = (('WWW-Authenticate', 'Digest realm="{}", nonce="{}", qop="auth"'.format(self.realm, nonce)),)
 
-        super(Authentication, self).denies(
-            detail,
-            exc.HTTPUnauthorized,
-            [('WWW-Authenticate', 'Digest realm="{}", nonce="{}", qop="auth"'.format(self.realm, nonce))]
-        )
+        super(Authentication, self).fails(body or '', content_type=content_type, headers=headers, **params)
+
+    def denies(self, body=None, content_type='application/html; charset=utf-8', **params):
+        """Method called when a permission is denied
+
+        In:
+          - ``details`` -- a ``security.common.denial`` object
+        """
+        super(Authentication, self).denies(body or '', content_type=content_type, **params)
 
     # --------------------------------------------------------------------------------
 

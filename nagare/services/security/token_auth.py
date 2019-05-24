@@ -57,13 +57,21 @@ class Authentication(common.Authentication):
 
         return principal, {}
 
-    def denies(self, detail=None, exception=exc.HTTPForbidden, headers=(), **params):
+    def fails(self, body=None, exception=exc.HTTPUnauthorized, content_type='text/plain; charset=utf-8', **params):
         """Method called when a permission is denied
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        super(Authentication, self).denies(detail, exception, headers=headers, **params)
+        super(Authentication, self).fails(body, exception, content_type=content_type, **params)
+
+    def denies(self, body=None, exception=exc.HTTPForbidden, content_type='text/plain; charset=utf-8', **params):
+        """Method called when a permission is denied
+
+        In:
+          - ``detail`` -- a ``security.common.denial`` object
+        """
+        super(Authentication, self).denies(body, exception, content_type=content_type, **params)
 
     # --------------------------------------------------------------------------------
 

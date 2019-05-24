@@ -11,7 +11,11 @@
 
 from nagare.services import plugin
 
-from nagare.security import set_manager, set_user, SecurityException, Denial, public, private
+from nagare.security import (
+    set_manager, set_user,
+    UnauthorizedException, ForbiddenException,
+    Denial, public, private
+)
 
 
 class Authentication(plugin.Plugin):
@@ -25,32 +29,36 @@ class Authentication(plugin.Plugin):
     def authenticate_and_create_user(self, **params):
         """Check if the user is valid and create it
         """
+        user = None
+
         # Retrieve the data associated with the connected user
         principal, credentials = self.get_principal(**params)
-
-        if (principal is None) or not self.authenticate_user(principal, **credentials):
-            user = None
-        else:
-            user = self.create_user(principal, **credentials)
-            user.credentials.setdefault('principal', principal)
-            for k, v in credentials.items():
-                user.credentials.setdefault(k, v)
+        if principal is not None:
+            if not self.authenticate_user(principal, **credentials):
+                self.fails()
+            else:
+                user = self.create_user(principal, **credentials)
+                user.credentials.setdefault('principal', principal)
+                for k, v in credentials.items():
+                    user.credentials.setdefault(k, v)
 
         return user
 
-    def denies(self, detail=None, exception=SecurityException, **params):
+    def fails(self, body=None, exception=UnauthorizedException, **params):
         """Method called when a permission is denied
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        raise exception(str('Access forbidden' if detail is None else detail), **params)
+        raise exception(body='Authorization failed' if body is None else str(body), **params)
 
-    def handle_request(self, chain, **params):
-        set_manager(self)
-        set_user(self.authenticate_and_create_user(**params))
+    def denies(self, body=None, exception=ForbiddenException, **params):
+        """Method called when a permission is denied
 
-        return chain.next(**params)
+        In:
+          - ``detail`` -- a ``security.common.denial`` object
+        """
+        raise exception(body='Access forbidden' if body is None else str(body), **params)
 
     def has_permissions(self, user, perms, subject, message=None):
         """The ``has_permission()`` generic method
@@ -82,6 +90,16 @@ class Authentication(plugin.Plugin):
 
     def has_permission(self, user, perm, subject):
         return False
+
+    def check_permissions(self, user, perms, subject, message=None):
+        has_permission = self.has_permissions(user, perms, subject, message)
+        return has_permission or self.denies(None if has_permission is False else has_permission)
+
+    def handle_request(self, chain, **params):
+        set_manager(self)
+        set_user(self.authenticate_and_create_user(**params))
+
+        return chain.next(**params)
 
     # --------------------------------------------------------------------------------
 

@@ -9,8 +9,6 @@
 
 """Authentication manager for the basic HTTP authentication scheme"""
 
-from webob import exc
-
 from . import token_auth
 
 
@@ -49,17 +47,22 @@ class Authentication(token_auth.Authentication):
     def authenticate_user(self, principal, password):
         return password == self.get_user_password(principal)
 
-    def denies(self, detail=None):
+    def fails(self, body=None, content_type='application/html; charset=utf-8', **params):
         """Method called when a permission is denied
 
         In:
           - ``details`` -- a ``security.common.denial`` object
         """
-        super(Authentication, self).denies(
-            detail,
-            exc.HTTPUnauthorized,
-            [('WWW-Authenticate', 'Basic realm="{}"'.format(self.realm))]
-        )
+        headers = (('WWW-Authenticate', 'Basic realm="{}"'.format(self.realm)),)
+        super(Authentication, self).fails(body or '', content_type=content_type, headers=headers, **params)
+
+    def denies(self, body=None, content_type='application/html; charset=utf-8', **params):
+        """Method called when a permission is denied
+
+        In:
+          - ``details`` -- a ``security.common.denial`` object
+        """
+        super(Authentication, self).denies(body or '', content_type=content_type, **params)
 
     # --------------------------------------------------------------------------------
 

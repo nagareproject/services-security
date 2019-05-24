@@ -73,13 +73,21 @@ class Authentication(common.Authentication):
         self.key = key or os.urandom(branca.CRYPTO_AEAD_XHCACHA20POLY1305_IETF_KEYBYTES)
         self.decoder = branca.Branca(self.key)
 
-    def denies(self, detail=None, exception=exc.HTTPForbidden, headers=(), **params):
+    def fails(self, body=None, content_type='application/html; charset=utf-8', **params):
         """Method called when a permission is denied
 
         In:
-          - ``detail`` -- a ``security.common.denial`` object
+          - ``details`` -- a ``security.common.denial`` object
         """
-        super(Authentication, self).denies(detail, exception, headers=headers, **params)
+        super(Authentication, self).fails(body or '', exc.HTTPUnauthorized, content_type=content_type, **params)
+
+    def denies(self, body=None, content_type='application/html; charset=utf-8', **params):
+        """Method called when a permission is denied
+
+        In:
+          - ``details`` -- a ``security.common.denial`` object
+        """
+        super(Authentication, self).denies(body or '', exc.HTTPForbidden, content_type=content_type, **params)
 
     def get_principal_from_params(self, params):
         """Search the data associated with the connected user into the request

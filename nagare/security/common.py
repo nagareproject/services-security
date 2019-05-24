@@ -14,7 +14,8 @@ from nagare import local
 
 __all__ = (
     'get_manager', 'set_manager', 'get_user', 'set_user',
-    'SecurityException', 'has_permissions', 'check_permissions', 'permissions',
+    'SecurityException', 'UnauthorizedException', 'ForbiddenException',
+    'has_permissions', 'check_permissions', 'permissions',
     'User', 'Permission', 'Private', 'Public', 'private', 'public', 'Denial'
 )
 
@@ -35,8 +36,19 @@ def get_user(only_valid=True):
 def set_user(user):
     local.request.user = user
 
+# ---------------------------------------------------------------------------
+
 
 class SecurityException(Exception):
+    def __init__(self, body=None):
+        super(SecurityException, self).__init__(body)
+
+
+class UnauthorizedException(SecurityException):
+    pass
+
+
+class ForbiddenException(SecurityException):
     pass
 
 # ---------------------------------------------------------------------------
@@ -47,8 +59,7 @@ def has_permissions(permissions, subject=None, message=None):
 
 
 def check_permissions(permissions, subject=None, message=None):
-    has_permission = has_permissions(permissions, subject, message)
-    return has_permission or get_manager().denies(None if has_permission is False else has_permission)
+    return get_manager().check_permissions(get_user(), permissions, subject, message)
 
 
 def permissions(permissions, subject=None, message=None):
@@ -141,5 +152,8 @@ class Denial(object):
 
     __bool__ = __nonzero__
 
-    def __str__(self):
+    def __repr__(self):
         return 'security.Denial({})'.format(self.detail)
+
+    def __str__(self):
+        return self.detail
