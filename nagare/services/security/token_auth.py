@@ -75,14 +75,11 @@ class Authentication(common.Authentication):
 
     # --------------------------------------------------------------------------------
 
-    def authenticate_user(self, token):
-        raise NotImplementedError()
-
     def create_user(self, token):
         """The user is validated, create the user object
 
         In:
-          - ``username`` -- the user id
+          - ``token`` -- the user id
 
         Return:
           - the user object

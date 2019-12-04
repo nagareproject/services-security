@@ -37,29 +37,24 @@ class Authentication(token_auth.Authentication):
         self.realm = realm
         self.nonce_seed = os.urandom(16)
 
-    def get_principal(self, request, response, **params):
-        """Return the data associated with the connected user
+    def fails(self, body=None, content_type='application/html; charset=utf-8', **params):
+        """Method called when a permission is denied
 
         In:
-          - ``request`` -- the WebOb request object
-          - ``response`` -- the WebOb response object
-
-        Return:
-          - A tuple with the id of the user and all the challenge response parameters
+          - ``details`` -- a ``security.common.denial`` object
         """
-        principal, credentials = super(Authentication, self).get_principal(request=request, **params)
+        nonce = hashlib.md5(b'%r:%s' % (time.time(), self.nonce_seed)).hexdigest()
+        headers = (('WWW-Authenticate', 'Digest realm="{}", nonce="{}", qop="auth"'.format(self.realm, nonce)),)
 
-        encoding = request.accept_charset.best_match(['iso-8859-1', 'utf-8'])
+        super(Authentication, self).fails(body or '', content_type=content_type, headers=headers, **params)
 
-        if principal is not None:
-            credentials = [x.split('=', 1) for x in principal.split(',')]
-            credentials = {k.lstrip(): v.strip('"') for k, v in credentials}
-            principal = credentials.pop('username', None)
-            credentials['http_method'] = request.method
-            credentials = {k: v.encode(encoding) for k, v in credentials.items()}
-            credentials['encoding'] = encoding
+    def denies(self, body=None, content_type='application/html; charset=utf-8', **params):
+        """Method called when a permission is denied
 
-        return principal, credentials
+        In:
+          - ``details`` -- a ``security.common.denial`` object
+        """
+        super(Authentication, self).denies(body or '', content_type=content_type, **params)
 
     def authenticate_user(
         self,
@@ -94,24 +89,32 @@ class Authentication(token_auth.Authentication):
         # Compare our hash with the response
         return hashlib.md5(sig).hexdigest().encode(encoding) == response
 
-    def fails(self, body=None, content_type='application/html; charset=utf-8', **params):
-        """Method called when a permission is denied
+    def get_principal(self, request, response, **params):
+        """Return the data associated with the connected user
 
         In:
-          - ``details`` -- a ``security.common.denial`` object
+          - ``request`` -- the WebOb request object
+          - ``response`` -- the WebOb response object
+
+        Return:
+          - A tuple with the id of the user and all the challenge response parameters
         """
-        nonce = hashlib.md5(b'%r:%s' % (time.time(), self.nonce_seed)).hexdigest()
-        headers = (('WWW-Authenticate', 'Digest realm="{}", nonce="{}", qop="auth"'.format(self.realm, nonce)),)
+        principal, credentials = super(Authentication, self).get_principal(request=request, **params)
 
-        super(Authentication, self).fails(body or '', content_type=content_type, headers=headers, **params)
+        encoding = request.accept_charset.best_match(['iso-8859-1', 'utf-8'])
 
-    def denies(self, body=None, content_type='application/html; charset=utf-8', **params):
-        """Method called when a permission is denied
+        if principal is not None:
+            credentials = [x.split('=', 1) for x in principal.split(',')]
+            credentials = {k.lstrip(): v.strip('"') for k, v in credentials}
+            principal = credentials.pop('username', None)
+            credentials['http_method'] = request.method
+            credentials = {k: v.encode(encoding) for k, v in credentials.items()}
+            credentials['encoding'] = encoding
 
-        In:
-          - ``details`` -- a ``security.common.denial`` object
-        """
-        super(Authentication, self).denies(body or '', content_type=content_type, **params)
+            if not self.authenticate_user(principal, **credentials):
+                self.fails()
+
+        return principal, credentials
 
     # --------------------------------------------------------------------------------
 
@@ -122,7 +125,7 @@ class Authentication(token_auth.Authentication):
         """The user is validated, create the user object
 
         In:
-          - ``username`` -- the user id
+          - ``principal`` -- the user id
 
         Return:
           - the user object

@@ -13,6 +13,7 @@ from nagare.services import plugin
 
 from nagare.security import (
     set_manager, set_user,
+    User,
     UnauthorizedException, ForbiddenException,
     Denial, public, private
 )
@@ -25,27 +26,10 @@ class Authentication(plugin.Plugin):
     .. note::
         By definition, the user object ``None`` is the anonymous user
     """
-
-    def authenticate_and_create_user(self, **params):
-        """Check if the user is valid and create it
-        """
-        user = None
-
-        # Retrieve the data associated with the connected user
-        principal, credentials = self.get_principal(**params)
-        if principal is not None:
-            if not self.authenticate_user(principal, **credentials):
-                self.fails()
-            else:
-                user = self.create_user(principal, **credentials)
-                user.credentials.setdefault('principal', principal)
-                for k, v in credentials.items():
-                    user.credentials.setdefault(k, v)
-
-        return user
+    LOAD_PRIORITY = 102
 
     def fails(self, body=None, exception=UnauthorizedException, **params):
-        """Method called when a permission is denied
+        """Method called when the authentication failed
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
@@ -88,18 +72,30 @@ class Authentication(plugin.Plugin):
 
         return has_permissions or Denial(message)
 
-    def has_permission(self, user, perm, subject):
-        return False
-
     def check_permissions(self, user, perms, subject, message=None):
         has_permission = self.has_permissions(user, perms, subject, message)
+
         return has_permission or self.denies(None if has_permission is False else has_permission)
 
     def handle_request(self, chain, **params):
         set_manager(self)
-        set_user(self.authenticate_and_create_user(**params))
+
+        # Retrieve the data associated with the connected user
+        principal, credentials = self.get_principal(**params)
+        user = self.create_user(principal, **credentials)
+        if isinstance(user, User):
+            user.credentials.setdefault('principal', principal)
+            for k, v in credentials.items():
+                user.credentials.setdefault(k, v)
+
+        set_user(user)
 
         return chain.next(**params)
+
+    # --------------------------------------------------------------------------------
+
+    def has_permission(self, user, perm, subject):
+        return False
 
     # --------------------------------------------------------------------------------
 
@@ -115,16 +111,5 @@ class Authentication(plugin.Plugin):
         """
         raise NotImplementedError()
 
-    def authenticate_user(self, principal, **credentials):
-        raise NotImplementedError()
-
     def create_user(self, principal, **credentials):
-        """The user is validated, create the user object
-
-        In:
-          - ``principal`` -- the user principal (id)
-
-        Return:
-          - the user object
-        """
         raise NotImplementedError()

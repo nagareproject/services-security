@@ -30,23 +30,6 @@ class Authentication(token_auth.Authentication):
         services_service(super(Authentication, self).__init__, name, dist, **config)
         self.realm = realm
 
-    def get_principal(self, **params):
-        """Return the data associated with the connected user
-
-        Return:
-          - A list with the id of the user and its password
-        """
-        principal, credentials = super(Authentication, self).get_principal(**params)
-
-        if (principal is not None) and (principal.count(':') == 1):
-            principal, password = principal.split(':')
-            credentials = {'password': password}
-
-        return principal, credentials
-
-    def authenticate_user(self, principal, password):
-        return password == self.get_user_password(principal)
-
     def fails(self, body=None, content_type='application/html; charset=utf-8', **params):
         """Method called when a permission is denied
 
@@ -64,16 +47,31 @@ class Authentication(token_auth.Authentication):
         """
         super(Authentication, self).denies(body or '', content_type=content_type, **params)
 
+    def get_principal(self, **params):
+        """Return the data associated with the connected user
+
+        Return:
+          - A list with the id of the user and its password
+        """
+        principal, _ = super(Authentication, self).get_principal(**params)
+
+        if (principal is not None) and (principal.count(':') == 1):
+            principal, password = principal.split(':')
+        else:
+            principal = password = None
+
+        return principal, {'password': password}
+
     # --------------------------------------------------------------------------------
 
-    def get_user_password(self, principal):
-        raise NotImplementedError()
+    def create_user(self, principal, password):
+        """Authenticate and create the user
 
-    def create_user(self, principal, **credentials):
-        """The user is validated, create the user object
+        Call ``self.fails()`` on wrong password
 
         In:
-          - ``username`` -- the user id
+          - ``principal`` -- the user id. Can be ``None``
+          - ``password`` -- the user password. Can be ``None``
 
         Return:
           - the user object

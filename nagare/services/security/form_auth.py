@@ -163,9 +163,9 @@ class Authentication(common.Authentication):
         )
 
     def handle_request(self, chain, request, response, session=None, **params):
-        r = super(Authentication, self).handle_request(
+        response = super(Authentication, self).handle_request(
             chain,
-            request=request, response=response,
+            request=request, response=response, session=session,
             **params
         )
 
@@ -179,9 +179,6 @@ class Authentication(common.Authentication):
                 if self.cookie_name in request.cookies:
                     response.delete_cookie(self.cookie_name, self.path, self.domain)
 
-                if (session is not None) and user.delete_session:
-                    session.delete()
-
                 location = user.logout_location
                 if location is not None:
                     if not location.startswith(('http', '/')):
@@ -190,10 +187,12 @@ class Authentication(common.Authentication):
                     response.status = 301
                     response.location = location
                     response.body = b''
+
+                response.delete_session = user.delete_session
             else:
                 self.set_principal_to_cookie(request, response, **user.credentials)
 
-        return r
+        return response
 
     def logout(self, location='', delete_session=True):
         """Deconnection of the current user
@@ -212,14 +211,11 @@ class Authentication(common.Authentication):
 
     # --------------------------------------------------------------------------------
 
-    def authenticate_user(self, principal, password, **credentials):
-        raise NotImplementedError()
-
-    def create_user(self, principal, **credentials):
-        """The user is validated, create the user object
-
+    def create_user(self, principal, password, **crendentials):
+        """
         In:
-          - ``username`` -- the user id
+          - ``principal`` -- the user id. Can be ``None``
+          - ``password`` -- the user password. Can be ``None``
 
         Return:
           - the user object
