@@ -25,9 +25,10 @@ os.environ['no_proxy'] = '1'
 
 
 class Authentication(common.Authentication):
-    AUTH_ENDPOINT = 'http://{host}:{port}/auth/realms/{realm}/protocol/openid-connect'
+    AUTH_ENDPOINT = '{scheme}://{host}:{port}/auth/realms/{realm}/protocol/openid-connect'
     CONFIG_SPEC = dict(
         common.Authentication.CONFIG_SPEC,
+        scheme='string(default="https")',
         host='string(default="localhost")',
         port='integer(default=9000)',
         discovery_url='string(default=None)',
@@ -144,7 +145,7 @@ class KeycloakAuthentication(Authentication):
     CONFIG_SPEC = dict(Authentication.CONFIG_SPEC, realm='string')
     del CONFIG_SPEC['discovery_url']
 
-    def __init__(self, name, dist, host, port, realm, services_service, **config):
-        self.base_url = 'http://{}:{}/auth/realms/{}'.format(host, port, realm)
+    def __init__(self, name, dist, scheme, host, port, realm, services_service, **config):
+        self.base_url = '{}://{}:{}/auth/realms/{}'.format(scheme, host, port, realm)
         discovery_url = self.base_url + '/.well-known/openid-configuration'
         services_service(super(KeycloakAuthentication, self).__init__, name, dist, discovery_url, host=host, port=port, realm=realm, **config)
