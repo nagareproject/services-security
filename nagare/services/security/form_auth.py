@@ -182,7 +182,7 @@ class Authentication(common.Authentication):
                 location = user.logout_location
                 if location is not None:
                     if not location.startswith(('http', '/')):
-                        location = request.application_url + '/' + location
+                        location = request.create_redirect_url(location)
 
                     response.status = 301
                     response.location = location
@@ -194,20 +194,26 @@ class Authentication(common.Authentication):
 
         return response
 
-    def logout(self, location='', delete_session=True):
+    def logout(self, location='', delete_session=True, user=None):
         """Deconnection of the current user
 
         Mark the user object as expired
 
         In:
           - ``location`` -- location to redirect to
-          - ``delete_session`` -- is the session expired too ?
+          - ``delete_session`` -- is the session expired too?
         """
-        user = security.get_user()
-        if user is not None:
-            user.logout_location = location
-            user.delete_session = delete_session
-            user.is_expired = True
+        if user is None:
+            user = security.get_user()
+
+        if user is None:
+            return False
+
+        user.logout_location = location
+        user.delete_session = delete_session
+        user.is_expired = True
+
+        return True
 
     # --------------------------------------------------------------------------------
 
