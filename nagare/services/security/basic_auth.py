@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2019 Net-ng.
+# Copyright (c) 2008-2020 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -27,7 +27,7 @@ class Authentication(token_auth.Authentication):
         In:
           - ``realm`` -- authentication realm
         """
-        services_service(super(Authentication, self).__init__, name, dist, **config)
+        services_service(super(Authentication, self).__init__, name, dist, realm=realm, **config)
         self.realm = realm
 
     def fails(self, body=None, content_type='application/html; charset=utf-8', **params):

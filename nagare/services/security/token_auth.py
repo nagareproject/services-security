@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2019 Net-ng.
+# Copyright (c) 2008-2020 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -25,7 +25,11 @@ class Authentication(common.Authentication):
     )
 
     def __init__(self, name, dist, scheme, base64_encoded, services_service, **config):
-        services_service(super(Authentication, self).__init__, name, dist, **config)
+        services_service(
+            super(Authentication, self).__init__, name, dist,
+            scheme=scheme, base64_encoded=base64_encoded,
+            **config
+        )
 
         self.scheme = scheme
         self.base64_encoded = base64_encoded
