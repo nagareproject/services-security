@@ -17,12 +17,11 @@ Then the user id and the password are automatically kept into a cookie,
 sent back on each request by the browser.
 """
 
-import os
 import json
 from webob import exc
 
-import branca
 from nagare import security
+from cryptography.fernet import InvalidToken, Fernet
 
 from . import common
 
@@ -77,8 +76,7 @@ class Authentication(common.Authentication):
         self.comment = comment
         self.overwrite = overwrite
 
-        self.key = key or os.urandom(branca.CRYPTO_AEAD_XHCACHA20POLY1305_IETF_KEYBYTES)
-        self.decoder = branca.Branca(self.key)
+        self.cipher = Fernet(key or Fernet.generate_key())
 
     def fails(self, body=None, content_type='application/html; charset=utf-8', **params):
         """Method called when a permission is denied
@@ -119,9 +117,9 @@ class Authentication(common.Authentication):
         """
         data = cookies.get(self.cookie_name)
         try:
-            r = json.loads(self.decoder.decode(data, self.max_age)) if data else [None, None]
-        except RuntimeError as e:
-            self.logger.info("Invalid cookie '{}': {}".format(data, e.args[0]))
+            r = json.loads(self.cipher.decrypt(data.encode('utf-8'), self.max_age)) if data else [None, None]
+        except InvalidToken:
+            self.logger.info("Invalid or expired cookie '{}'".format(data))
             r = [None, None]
         except Exception as e:
             self.logger.error('Cookie decoding: {}'.format(e))
@@ -159,7 +157,7 @@ class Authentication(common.Authentication):
 
         response.set_cookie(
             self.cookie_name,
-            branca.Branca(self.key).encode(json.dumps(data)),
+            self.cipher.encrypt(json.dumps(data).encode('utf-8')),
             max_age=self.max_age,
             path=self.path,
             domain=self.domain,

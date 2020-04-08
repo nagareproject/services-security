@@ -30,7 +30,7 @@ setup(
     setup_requires=['setuptools_scm'],
     use_scm_version=True,
     install_requires=[
-        'pybranca', 'requests', 'jwt',
+        'cryptography', 'requests', 'jwt',
         'nagare-services', 'nagare-server-http'
     ]
 )
