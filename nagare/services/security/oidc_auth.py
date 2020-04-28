@@ -29,7 +29,8 @@ os.environ['no_proxy'] = '1'
 
 
 class Authentication(common.Authentication):
-    ENDPOINTS = ('authorization_endpoint', 'token_endpoint', 'userinfo_endpoint')
+    REQUIRED_ENDPOINTS = {'authorization_endpoint', 'token_endpoint'}
+    ENDPOINTS = REQUIRED_ENDPOINTS | {'discovery_endpoint', 'userinfo_endpoint', 'end_session_endpoint'}
 
     CONFIG_SPEC = dict(
         common.Authentication.CONFIG_SPEC,
@@ -40,9 +41,7 @@ class Authentication(common.Authentication):
         client_id='string',
         client_secret='string(default="")',
         secure='boolean(default=True)',
-        verify='boolean(default=True)',
-        discovery_endpoint='string(default=None)',
-        end_session_endpoint='string(default=None)'
+        verify='boolean(default=True)'
     )
     CONFIG_SPEC.update({endpoint: 'string(default=None)' for endpoint in ENDPOINTS})
     EXCLUDED_CLAIMS = {'iss', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'acr', 'amr', 'azp'} | {'session_state', 'typ', 'nbf'}
@@ -52,7 +51,6 @@ class Authentication(common.Authentication):
         name, dist,
         client_id, client_secret='', secure=True,
         host='localhost', port=None, ssl=True, verify=True, timeout=5,
-        discovery_endpoint=None, end_session_endpoint=None,
         services_service=None,
         **config
     ):
@@ -60,7 +58,6 @@ class Authentication(common.Authentication):
             super(Authentication, self).__init__, name, dist,
             client_id=client_id, client_secret=client_secret, secure=secure,
             host=host, port=port, ssl=ssl, verify=verify, timeout=timeout,
-            discovery_endpoint=discovery_endpoint, end_session_endpoint=end_session_endpoint,
             services_service=services_service,
             **config
         )
@@ -84,13 +81,7 @@ class Authentication(common.Authentication):
             base_url='{}://{}:{}'.format(('https' if ssl else 'http'), host, port)
         )
 
-        self.discovery_endpoint = (discovery_endpoint or '').format(**endpoint_params)
-        self.end_session_endpoint = (end_session_endpoint or '').format(**endpoint_params)
         self.endpoints = {endpoint: (config[endpoint] or '').format(**endpoint_params) for endpoint in self.ENDPOINTS}
-
-        missing_endpoints = [endpoint for endpoint, url in self.endpoints.items() if not url]
-        if not self.discovery_endpoint and missing_endpoints:
-            self.logger.error('Endpoints without values: ' + ', '.join(missing_endpoints))
 
     def send_request(self, method, url, params=None, data=None):
         return requests.request(
@@ -99,15 +90,19 @@ class Authentication(common.Authentication):
         )
 
     def handle_start(self, app):
-        if self.discovery_endpoint:
-            r = self.send_request('GET', self.discovery_endpoint).json()
+        discovery_endpoint = self.endpoints['discovery_endpoint']
+        if discovery_endpoint:
+            r = self.send_request('GET', discovery_endpoint).json()
 
             self.issuer = r['issuer']
-            self.end_session_endpoint = r.get('end_session_endpoint')
-            self.endpoints = {endpoint: r[endpoint] for endpoint in self.ENDPOINTS}
+            self.endpoints = {endpoint: r.get(endpoint) for endpoint in self.ENDPOINTS}
 
             certs = self.send_request('GET', r['jwks_uri']).json()
             self.signing_keys = {key['kid']: jwt.jwk_from_dict(key) for key in certs['keys']}
+
+        missing_endpoints = [endpoint for endpoint in self.REQUIRED_ENDPOINTS if not self.endpoints[endpoint]]
+        if missing_endpoints:
+            self.logger.error('Endpoints without values: ' + ', '.join(missing_endpoints))
 
     def handle_request(self, chain, request, **params):
         response = super(Authentication, self).handle_request(chain, request=request, **params)
@@ -168,12 +163,16 @@ class Authentication(common.Authentication):
             'refresh_token': refresh_token
         }
 
-        return 'POST', self.end_session_endpoint, {}, payload
+        return 'POST', self.endpoints['end_session_endpoint'], {}, payload
 
     def create_userinfo_request(self, access_token):
+        userinfo_endpoint = self.endpoints['userinfo_endpoint']
+        if not userinfo_endpoint:
+            raise NotImplementedError()
+
         payload = {'access_token': access_token}
 
-        return 'POST', self.endpoints['userinfo_endpoint'], {}, payload
+        return 'POST', userinfo_endpoint, {}, payload
 
     def validate_id_token(self, id_token):
         audiences = set(id_token['aud'].split())
@@ -190,18 +189,23 @@ class Authentication(common.Authentication):
     def create_credentials(self, id_token):
         return {k: id_token[k] for k in set(id_token) - self.EXCLUDED_CLAIMS}
 
+    @staticmethod
+    def is_auth_response(request):
+        state = request.params.get('state')
+        code = request.params.get('code')
+
+        return code if code and state and state.startswith('#oauth#-') else None
+
     def get_principal(self, request, session, **params):
         principal = None
         credentials = {}
 
         if session:
-            state = request.params.get('state')
-            code = request.params.get('code')
-            url = None
-
             credentials = session.get('nagare.credentials', {})
 
-            if code and state and state.startswith('#oauth#-'):
+            url = None
+            code = self.is_auth_response(request)
+            if code:
                 method, url, params, data = self.create_token_request(request.create_redirect_url(), code)
             else:
                 if credentials and (credentials['exp'] < time.time()):
@@ -210,7 +214,12 @@ class Authentication(common.Authentication):
             if url:
                 response = self.send_request(method, url, params, data)
                 if response.status_code == 400:
-                    self.logger.error(response.params.get('error') or response.json()['error'])
+                    error = response.text
+                    if response.headers.get('content-type') == 'application/json':
+                        response = response.json()
+                        if 'error' in response:
+                            error = response['error']
+                    self.logger.error(error)
                     credentials = {}
                 elif response.status_code != 200:
                     self.logger.error('Authentication error')
@@ -239,6 +248,9 @@ class Authentication(common.Authentication):
         return principal, credentials
 
     def login(self, h, scopes=(), **params):
+        if self.is_auth_response(h.request):
+            return ''
+
         _, url, params, _ = self.create_auth_request(
             h.session_id, h.state_id,
             h.request.create_redirect_url(),
@@ -249,7 +261,7 @@ class Authentication(common.Authentication):
         response.status_code = 307
         response.headers['Location'] = url + '?' + urlencode(params)
 
-        return ''
+        return response
 
     def logout(self, location='', delete_session=True, user=None):
         """Deconnection of the current user
