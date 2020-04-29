@@ -219,6 +219,9 @@ class Authentication(common.Authentication):
                         response = response.json()
                         if 'error' in response:
                             error = response['error']
+                            description = response.get('error_description')
+                            if description:
+                                error += ': ' + description
                     self.logger.error(error)
                     credentials = {}
                 elif response.status_code != 200:
