@@ -29,6 +29,7 @@ os.environ['no_proxy'] = '1'
 
 
 class Authentication(common.Authentication):
+    LOAD_PRIORITY = common.Authentication.LOAD_PRIORITY + 1
     REQUIRED_ENDPOINTS = {'authorization_endpoint', 'token_endpoint'}
     ENDPOINTS = REQUIRED_ENDPOINTS | {'discovery_endpoint', 'userinfo_endpoint', 'end_session_endpoint'}
 
@@ -191,6 +192,10 @@ class Authentication(common.Authentication):
     def create_credentials(self, id_token):
         return {k: id_token[k] for k in set(id_token) - self.EXCLUDED_CLAIMS}
 
+    def refresh_token(self, refresh_token):
+        method, url, params, data = self.create_refresh_token_request(refresh_token)
+        return self.send_request(method, url, params, data)
+
     @staticmethod
     def is_auth_response(request):
         state = request.params.get('state')
@@ -205,15 +210,9 @@ class Authentication(common.Authentication):
         if session:
             credentials = session.get('nagare.credentials', {})
 
-            url = None
             code = self.is_auth_response(request)
             if code:
                 method, url, params, data = self.create_token_request(request.create_redirect_url(), code)
-            else:
-                if credentials and (credentials['exp'] < time.time()):
-                    method, url, params, data = self.create_refresh_token_request(credentials['refresh_token'])
-
-            if url:
                 response = self.send_request(method, url, params, data)
                 if response.status_code == 400:
                     error = response.text
@@ -244,7 +243,7 @@ class Authentication(common.Authentication):
                         credentials = self.create_credentials(id_token)
                         credentials['exp'] = int(time.time()) + (id_token['exp'] - id_token['iat'])
                         credentials['access_token'] = tokens['access_token']
-                        credentials['refresh_token'] = tokens['refresh_token']
+                        credentials['refresh_token'] = tokens.get('refresh_token')
 
                 session['nagare.credentials'] = credentials
 
@@ -268,7 +267,7 @@ class Authentication(common.Authentication):
 
         return response
 
-    def logout(self, location='', delete_session=True, user=None):
+    def logout(self, location='', delete_session=True, user=None, access_token=None):
         """Deconnection of the current user
 
         Mark the user object as expired
@@ -287,24 +286,20 @@ class Authentication(common.Authentication):
         user.delete_session = delete_session
         user.is_expired = True
 
-        method, url, params, data = self.create_end_session_request(user.credentials['refresh_token'])
+        status = True
+        if access_token is not None:
+            method, url, params, data = self.create_end_session_request(access_token)
 
-        if not url:
-            status = True
-        else:
-            response = self.send_request(method, url, params, data)
-            status = (response.status_code == 204)
+            if not url:
+                status = True
+            else:
+                response = self.send_request(method, url, params, data)
+                status = (response.status_code == 204)
 
         return status
 
-    def user_info(self, user=None):
-        if user is None:
-            user = security.get_user()
-
-        if user is None:
-            return {}
-
-        request = self.create_userinfo_request(user.credentials['access_token'])
+    def user_info(self, access_token):
+        request = self.create_userinfo_request(access_token)
         response = self.send_request(*request)
 
         return response.json() if response.status_code == 200 else {}

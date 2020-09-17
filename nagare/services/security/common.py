@@ -36,7 +36,7 @@ class Authentication(plugin.Plugin):
         """
         raise exception(body='Authorization failed' if body is None else str(body), **params)
 
-    def denies(self, body=None, exception=UnauthorizedException, **params):
+    def denies(self, body=None, exception=ForbiddenException, **params):
         """Method called when a permission is denied
 
         In:
