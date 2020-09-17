@@ -105,21 +105,23 @@ class Authentication(common.Authentication):
             self.logger.error('Endpoints without values: ' + ', '.join(missing_endpoints))
 
     def handle_request(self, chain, request, **params):
+        was_authenticated = security.get_user() is not None
         response = super(Authentication, self).handle_request(chain, request=request, **params)
 
-        user = security.get_user(only_valid=False)
+        if not was_authenticated:
+            user = security.get_user(only_valid=False)
 
-        if (user is not None) and user.is_expired:
-            location = user.logout_location
-            if location is not None:
-                if not location.startswith(('http', '/')):
-                    location = request.create_redirect_url(location)
+            if (user is not None) and user.is_expired:
+                location = user.logout_location
+                if location is not None:
+                    if not location.startswith(('http', '/')):
+                        location = request.create_redirect_url(location)
 
-                response.status = 301
-                response.location = location
-                response.body = b''
+                    response.status = 301
+                    response.location = location
+                    response.body = b''
 
-            response.delete_session = user.delete_session
+                response.delete_session = user.delete_session
 
         return response
 

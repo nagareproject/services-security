@@ -168,34 +168,36 @@ class Authentication(common.Authentication):
         )
 
     def handle_request(self, chain, request, response, session=None, **params):
+        was_authenticated = security.get_user() is not None
         response = super(Authentication, self).handle_request(
             chain,
             request=request, response=response, session=session,
             **params
         )
 
-        user = security.get_user(only_valid=False)
+        if not was_authenticated:
+            user = security.get_user(only_valid=False)
 
-        if user is None:
-            if self.cookie_name in request.cookies:
-                response.delete_cookie(self.cookie_name, self.path, self.domain)
-        else:
-            if user.is_expired:
+            if user is None:
                 if self.cookie_name in request.cookies:
                     response.delete_cookie(self.cookie_name, self.path, self.domain)
-
-                location = user.logout_location
-                if location is not None:
-                    if not location.startswith(('http', '/')):
-                        location = request.create_redirect_url(location)
-
-                    response.status = 301
-                    response.location = location
-                    response.body = b''
-
-                response.delete_session = user.delete_session
             else:
-                self.set_principal_to_cookie(request, response, **user.credentials)
+                if user.is_expired:
+                    if self.cookie_name in request.cookies:
+                        response.delete_cookie(self.cookie_name, self.path, self.domain)
+
+                    location = user.logout_location
+                    if location is not None:
+                        if not location.startswith(('http', '/')):
+                            location = request.create_redirect_url(location)
+
+                        response.status = 301
+                        response.location = location
+                        response.body = b''
+
+                    response.delete_session = user.delete_session
+                else:
+                    self.set_principal_to_cookie(request, response, **user.credentials)
 
         return response
 

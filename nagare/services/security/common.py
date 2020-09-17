@@ -12,7 +12,7 @@
 from nagare.services import plugin
 
 from nagare.security import (
-    set_manager, set_user,
+    set_manager, set_user, get_user,
     User,
     UnauthorizedException, ForbiddenException,
     Denial, public, private
@@ -78,17 +78,18 @@ class Authentication(plugin.Plugin):
         return has_permission or self.denies(None if has_permission is False else str(has_permission), exception)
 
     def handle_request(self, chain, **params):
-        set_manager(self)
+        if get_user() is None:
+            set_manager(self)
 
-        # Retrieve the data associated with the connected user
-        principal, credentials = self.get_principal(**params)
-        user = self.create_user(principal, **credentials)
-        if isinstance(user, User):
-            user.credentials.setdefault('principal', principal)
-            for k, v in credentials.items():
-                user.credentials.setdefault(k, v)
+            # Retrieve the data associated with the connected user
+            principal, credentials = self.get_principal(**params)
+            user = self.create_user(principal, **credentials)
+            if isinstance(user, User):
+                user.credentials.setdefault('principal', principal)
+                for k, v in credentials.items():
+                    user.credentials.setdefault(k, v)
 
-        set_user(user)
+            set_user(user)
 
         return chain.next(**params)
 
