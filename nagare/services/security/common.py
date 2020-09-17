@@ -36,13 +36,13 @@ class Authentication(plugin.Plugin):
         """
         raise exception(body='Authorization failed' if body is None else str(body), **params)
 
-    def denies(self, body=None, exception=ForbiddenException, **params):
+    def denies(self, body=None, exception=UnauthorizedException, **params):
         """Method called when a permission is denied
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        raise exception(body='Access forbidden' if body is None else str(body), **params)
+        raise exception(body='Access forbidden' if body is None else body, **params)
 
     def has_permissions(self, user, perms, subject, message=None):
         """The ``has_permission()`` generic method
@@ -72,10 +72,10 @@ class Authentication(plugin.Plugin):
 
         return has_permissions or Denial(message)
 
-    def check_permissions(self, user, perms, subject, message=None):
+    def check_permissions(self, user, perms, subject, message=None, exception=None):
         has_permission = self.has_permissions(user, perms, subject, message)
 
-        return has_permission or self.denies(None if has_permission is False else has_permission)
+        return has_permission or self.denies(None if has_permission is False else str(has_permission), exception)
 
     def handle_request(self, chain, **params):
         set_manager(self)

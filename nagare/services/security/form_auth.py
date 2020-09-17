@@ -222,7 +222,7 @@ class Authentication(common.Authentication):
 
     # --------------------------------------------------------------------------------
 
-    def create_user(self, principal, password, **crendentials):
+    def create_user(self, principal, password, **credentials):
         """
         In:
           - ``principal`` -- the user id. Can be ``None``

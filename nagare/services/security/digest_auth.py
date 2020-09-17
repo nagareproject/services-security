@@ -121,7 +121,7 @@ class Authentication(token_auth.Authentication):
     def get_user_password(self, principal):
         raise NotImplementedError()
 
-    def create_user(self, principal, **crendentials):
+    def create_user(self, principal, **credentials):
         """The user is validated, create the user object
 
         In:

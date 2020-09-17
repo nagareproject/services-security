@@ -58,12 +58,12 @@ def has_permissions(permissions, subject=None, message=None):
     return get_manager().has_permissions(get_user(), permissions, subject, message)
 
 
-def check_permissions(permissions, subject=None, message=None):
-    return get_manager().check_permissions(get_user(), permissions, subject, message)
+def check_permissions(permissions, subject=None, message=None, exception=None):
+    return get_manager().check_permissions(get_user(), permissions, subject, message, exception)
 
 
-def permissions(permissions, subject=None, message=None):
-    return lambda f: lambda *args, **kw: check_permissions(permissions, subject, message) and f(*args, **kw)
+def permissions(permissions, subject=None, message=None, exception=None):
+    return lambda f: lambda *args, **kw: check_permissions(permissions, subject, message, exception) and f(*args, **kw)
 
 # ---------------------------------------------------------------------------
 
