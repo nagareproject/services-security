@@ -7,10 +7,10 @@
 # this distribution.
 # --
 
-"""Authentication manager for the basic HTTP authentication scheme"""
+"""Authentication manager for token based HTTP authentication"""
 
 import binascii
-from webob import exc
+from webob. exc import HTTPUnauthorized, HTTPForbidden
 
 from . import common
 
@@ -33,6 +33,22 @@ class Authentication(common.Authentication):
 
         self.scheme = scheme
         self.base64_encoded = base64_encoded
+
+    def fails(self, body=None, exc=None, **params):
+        """Method called when authentication failed
+
+        In:
+          - ``detail`` -- a ``security.common.denial`` object
+        """
+        super(Authentication, self).fails(body, exc or HTTPUnauthorized, **params)
+
+    def denies(self, body=None, exc=None, **params):
+        """Method called when a permission is denied
+
+        In:
+          - ``detail`` -- a ``security.common.denial`` object
+        """
+        super(Authentication, self).denies(body, exc or HTTPForbidden, **params)
 
     def get_principal(self, request, **params):
         """Return the data associated with the connected user
@@ -60,22 +76,6 @@ class Authentication(common.Authentication):
                         pass
 
         return principal, {}
-
-    def fails(self, body=None, exception=exc.HTTPUnauthorized, content_type='text/plain; charset=utf-8', **params):
-        """Method called when a permission is denied
-
-        In:
-          - ``detail`` -- a ``security.common.denial`` object
-        """
-        super(Authentication, self).fails(body, exception, content_type=content_type, **params)
-
-    def denies(self, body=None, exception=exc.HTTPForbidden, content_type='text/plain; charset=utf-8', **params):
-        """Method called when a permission is denied
-
-        In:
-          - ``detail`` -- a ``security.common.denial`` object
-        """
-        super(Authentication, self).denies(body, exception, content_type=content_type, **params)
 
     # --------------------------------------------------------------------------------
 

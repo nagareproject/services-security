@@ -9,7 +9,7 @@
 # this distribution.
 # --
 
-from nagare import local
+from nagare import local, partial
 
 
 __all__ = (
@@ -45,25 +45,32 @@ class SecurityException(Exception):
 
 
 class UnauthorizedException(SecurityException):
-    pass
+    def __init__(self, body=None):
+        super(UnauthorizedException, self).__init__('Authorization failed' if body is None else body)
 
 
 class ForbiddenException(SecurityException):
-    pass
+    def __init__(self, body=None):
+        super(ForbiddenException, self).__init__('Access forbidden' if body is None else body)
 
 # ---------------------------------------------------------------------------
 
 
-def has_permissions(permissions, subject=None, message=None):
-    return get_manager().has_permissions(get_user(), permissions, subject, message)
+def has_permissions(permissions, subject=None, msg=None):
+    return get_manager().has_permissions(get_user(), permissions, subject, msg)
 
 
-def check_permissions(permissions, subject=None, message=None, exception=None):
-    return get_manager().check_permissions(get_user(), permissions, subject, message, exception)
+def check_permissions(permissions, subject=None, msg=None, exc=None):
+    get_manager().check_permissions(get_user(), permissions, subject, msg, exc)
 
 
-def permissions(permissions, subject=None, message=None, exception=None):
-    return lambda f: lambda *args, **kw: check_permissions(permissions, subject, message, exception) and f(*args, **kw)
+def guarded_call(f, __permissions, __subject, __msg, __exc, self, *args, **kw):
+    check_permissions(__permissions, self if __subject is None else __subject, __msg, __exc)
+    return f(self, *args, **kw)
+
+
+def permissions(permissions, subject=None, msg=None, exc=None):
+    return lambda f: partial.Decorator(f, guarded_call, permissions, subject, msg, exc)
 
 # ---------------------------------------------------------------------------
 
@@ -111,7 +118,8 @@ class Private(Permission):
 
     Nobody has access to objects protected with this permission
     """
-    def __nonzero__(self):
+    @staticmethod
+    def __nonzero__():
         """Evaluated to ``False`` in a boolean context
         """
         return False
@@ -145,7 +153,8 @@ class Denial(object):
         """
         self.detail = 'Access forbidden' if detail is None else detail
 
-    def __nonzero__(self):
+    @staticmethod
+    def __nonzero__():
         """Evaluated to ``False`` in a boolean context
         """
         return False

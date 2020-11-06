@@ -28,23 +28,23 @@ class Authentication(plugin.Plugin):
     """
     LOAD_PRIORITY = 102
 
-    def fails(self, body=None, exception=UnauthorizedException, **params):
-        """Method called when the authentication failed
+    def fails(self, body=None, exc=None, **params):
+        """Method called when authentication failed
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        raise exception(body='Authorization failed' if body is None else str(body), **params)
+        raise (exc or UnauthorizedException)(body, **params)
 
-    def denies(self, body=None, exception=ForbiddenException, **params):
+    def denies(self, body=None, exc=None, **params):
         """Method called when a permission is denied
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        raise exception(body='Access forbidden' if body is None else body, **params)
+        raise (exc or ForbiddenException)(body, **params)
 
-    def has_permissions(self, user, perms, subject, message=None):
+    def has_permissions(self, user, perms, subject, msg=None):
         """The ``has_permission()`` generic method
         and default implementation: by default all accesses are denied
 
@@ -59,7 +59,7 @@ class Authentication(plugin.Plugin):
         """
         # If several permissions are to be checked, the access must be granted for at least one permission
         if isinstance(perms, (tuple, list, set)):
-            has_permissions = any(self.has_permissions(user, perm, subject, message) for perm in perms)
+            has_permissions = any(self.has_permissions(user, perm, subject, msg) for perm in perms)
         else:
             if perms is public:
                 # Everybody has access to an object protected with the ``public`` permission
@@ -70,37 +70,59 @@ class Authentication(plugin.Plugin):
             else:
                 has_permissions = self.has_permission(user, perms, subject)
 
-        return has_permissions or Denial(message)
+        if not has_permissions:
+            if msg is None:
+                msg = str(has_permissions) if isinstance(has_permissions, Denial) else None
 
-    def check_permissions(self, user, perms, subject, message=None, exception=None):
-        has_permission = self.has_permissions(user, perms, subject, message)
+            has_permissions = Denial(msg)
 
-        return has_permission or self.denies(None if has_permission is False else str(has_permission), exception)
+        return has_permissions
 
-    def handle_request(self, chain, **params):
-        if get_user() is None:
-            set_manager(self)
+    def check_permissions(self, user, perms, subject, msg=None, exc=None):
+        has_permissions = self.has_permissions(user, perms, subject, msg)
+        if not has_permissions:
+            msg = str(has_permissions) if isinstance(has_permissions, Denial) else None
+            self.denies(msg, exc)
 
-            # Retrieve the data associated with the connected user
-            principal, credentials = self.get_principal(**params)
-            user = self.create_user(principal, **credentials)
-            if isinstance(user, User):
-                user.credentials.setdefault('principal', principal)
-                for k, v in credentials.items():
-                    user.credentials.setdefault(k, v)
+    def authenticate(self, **params):
+        if get_user() is not None:
+            return None
 
-            set_user(user)
+        set_manager(self)
 
-        return chain.next(**params)
+        # Retrieve the data associated with the connected user
+        principal, credentials = self.get_principal(**params)
+        user = self.create_user(principal, **credentials)
+        if isinstance(user, User):
+            user.credentials.setdefault('principal', principal)
+            for k, v in credentials.items():
+                user.credentials.setdefault(k, v)
+
+        set_user(user)
+
+        return user
+
+    @staticmethod
+    def cleanup(user, **params):
+        pass
+
+    def handle_request(self, chain, response, **params):
+        user = self.authenticate(response=response, **params)
+        response = chain.next(response=response, **params)
+        if user is not None:
+            self.cleanup(user, response=response, **params)
+
+        return response
 
     # --------------------------------------------------------------------------------
 
-    def has_permission(self, user, perm, subject):
+    @staticmethod
+    def has_permission(user, perm, subject):
         return False
 
     # --------------------------------------------------------------------------------
 
-    def get_principal(self, request, response, **params):
+    def get_principal(self, **params):
         """Return the data associated with the connected user
 
         In:

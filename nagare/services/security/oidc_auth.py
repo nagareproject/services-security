@@ -11,65 +11,130 @@
 
 import os
 import time
-import json
-from base64 import urlsafe_b64decode
+import copy
+from base64 import urlsafe_b64encode
 
 try:
     from urllib.parse import urlencode
 except ImportError:
     from urllib import urlencode
 
-import jwt
+
 import requests
+from jwcrypto import jwk, jws
+from jwcrypto.common import JWException
+from python_jwt import generate_jwt, process_jwt, verify_jwt
 
-from . import common
-from nagare import security
+from nagare import partial
+from nagare.renderers import xml
 
-os.environ['no_proxy'] = '1'
+from . import cookie_auth
 
 
-class Authentication(common.Authentication):
-    LOAD_PRIORITY = common.Authentication.LOAD_PRIORITY + 1
+class Login(xml.Component):
+    ACTION_PRIORITY = 5
+
+    def __init__(self, manager, renderer, scopes):
+        self.manager = manager
+        self.scopes = scopes
+        self.renderer = renderer
+
+        self._action = None
+        self.with_request = False
+        self.args = ()
+        self.kw = {}
+
+    @partial.max_number_of_args(2)
+    def action(self, action, args, with_request=False, **kw):
+        self._action = action
+        self.with_request = with_request
+        self.args = args
+        self.kw = kw
+
+        return self
+
+    def set_sync_action(self, action_id, params):
+        pass
+
+    def render(self, h):
+        if self._action is not None:
+            action_id, params = self.renderer.register_callback(
+                self,
+                self.ACTION_PRIORITY,
+                self._action,
+                self.with_request, *self.args, **self.kw
+            )
+
+        _, url, params, _ = self.manager.create_auth_request(
+            h.session_id, h.state_id, action_id,
+            h.request.create_redirect_url(),
+            self.scopes
+        )
+
+        response = h.response
+        response.status_code = 307
+        response.headers['Location'] = url + '?' + urlencode(params)
+
+        return response
+
+
+class Authentication(cookie_auth.Authentication):
+    LOAD_PRIORITY = cookie_auth.Authentication.LOAD_PRIORITY + 1
+
     REQUIRED_ENDPOINTS = {'authorization_endpoint', 'token_endpoint'}
-    ENDPOINTS = REQUIRED_ENDPOINTS | {'discovery_endpoint', 'userinfo_endpoint', 'end_session_endpoint'}
+    ENDPOINTS = REQUIRED_ENDPOINTS | {'discovery_endpoint', 'userinfo_endpoint', 'end_session_endpoint', 'jwks_uri'}
+    EXCLUDED_CLAIMS = {'iss', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'acr', 'amr', 'azp'} | {'session_state', 'typ', 'nbf'}
 
     CONFIG_SPEC = dict(
-        common.Authentication.CONFIG_SPEC,
-        host='string(default="localhost")',
-        port='integer(default=None)',
-        ssl='boolean(default=True)',
-        timeout='integer(default=5)',
-        client_id='string',
-        client_secret='string(default="")',
-        secure='boolean(default=True)',
-        verify='boolean(default=True)'
+        copy.deepcopy(cookie_auth.Authentication.CONFIG_SPEC),
+        host='string(default="localhost", help="server hostname")',
+        port='integer(default=None, help="server port")',
+        ssl='boolean(default=True, help="HTTPS protocol")',
+        proxy='string(default=None, help="HTTP/S proxy to use)',
+        verify='boolean(default=True, help="SSL certificate verification")',
+        timeout='integer(default=5, help="communication timeout")',
+        client_id='string(help="application identifier")',
+        client_secret='string(default="", help="application authentication")',
+        secure='boolean(default=True, help="JWT signature verification")',
+        algorithms='string_list(default=list({}), help="accepted signing/encryption algorithms")'.format(', '.join(jws.default_allowed_algs)),
+        key='string(default=None, help="cookie encoding key")',
+        jwks_uri='string(default=None, help="JWK keys set document',
+        issuer='string(default=None, help="server identifier")'
     )
+    CONFIG_SPEC['cookie']['activated'] = 'boolean(default=False)'
+    CONFIG_SPEC['cookie']['encrypt'] = 'boolean(default=False)'
     CONFIG_SPEC.update({endpoint: 'string(default=None)' for endpoint in ENDPOINTS})
-    EXCLUDED_CLAIMS = {'iss', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'acr', 'amr', 'azp'} | {'session_state', 'typ', 'nbf'}
 
     def __init__(
         self,
         name, dist,
-        client_id, client_secret='', secure=True,
-        host='localhost', port=None, ssl=True, verify=True, timeout=5,
+        client_id, client_secret='', secure=True, algorithms=jws.default_allowed_algs,
+        host='localhost', port=None, ssl=True, verify=True, timeout=5, proxy=None,
+        key=None, issuer=None,
         services_service=None,
         **config
     ):
         services_service(
             super(Authentication, self).__init__, name, dist,
-            client_id=client_id, client_secret=client_secret, secure=secure,
-            host=host, port=port, ssl=ssl, verify=verify, timeout=timeout,
+            client_id=client_id, client_secret=client_secret, secure=secure, algorithms=algorithms,
+            host=host, port=port, ssl=ssl, verify=verify, timeout=timeout, proxy=proxy,
+            key=key, issuer=issuer,
             services_service=services_service,
             **config
         )
+        self.key = key or urlsafe_b64encode(os.urandom(32)).decode('ascii')
+        self.jwk_key = jwk.JWK(kty='oct', k=self.key)
 
         self.timeout = timeout
         self.client_id = client_id
         self.client_secret = client_secret
         self.secure = secure
+        self.algorithms = algorithms
         self.verify = verify
+        self.proxies = {'http': proxy, 'https': proxy} if proxy else None
 
-        self.issuer = self.signing_keys = None
+        self.issuer = issuer
+        self.signing_keys = jwk.JWKSet()
 
         if not port:
             port = 443 if ssl else 80
@@ -87,7 +152,7 @@ class Authentication(common.Authentication):
     def send_request(self, method, url, params=None, data=None):
         return requests.request(
             method, url, params=params or {}, data=data or {},
-            verify=self.verify, timeout=self.timeout
+            verify=self.verify, timeout=self.timeout, proxies=self.proxies
         )
 
     def handle_start(self, app):
@@ -97,43 +162,28 @@ class Authentication(common.Authentication):
 
             self.issuer = r['issuer']
             self.endpoints = {endpoint: r.get(endpoint) for endpoint in self.ENDPOINTS}
+            jwks_uri = self.endpoints['jwks_uri']
+        else:
+            jwks_uri = self.jwks_uri
 
-            certs = self.send_request('GET', r['jwks_uri']).json()
-            self.signing_keys = {key['kid']: jwt.jwk_from_dict(key) for key in certs['keys']}
+        if jwks_uri:
+            certs = self.send_request('GET', r['jwks_uri']).text
+            self.signing_keys.import_keyset(certs)
 
         missing_endpoints = [endpoint for endpoint in self.REQUIRED_ENDPOINTS if not self.endpoints[endpoint]]
         if missing_endpoints:
             self.logger.error('Endpoints without values: ' + ', '.join(missing_endpoints))
 
-    def handle_request(self, chain, request, **params):
-        was_authenticated = security.get_user() is not None
-        response = super(Authentication, self).handle_request(chain, request=request, **params)
+    def create_auth_request(self, session_id, state_id, action_id, redirect_url, scopes=(), **params):
+        state = b'%d#%d#%s' % (session_id, state_id, (action_id or '').encode('ascii'))
 
-        if not was_authenticated:
-            user = security.get_user(only_valid=False)
-
-            if (user is not None) and user.is_expired:
-                location = user.logout_location
-                if location is not None:
-                    if not location.startswith(('http', '/')):
-                        location = request.create_redirect_url(location)
-
-                    response.status = 301
-                    response.location = location
-                    response.body = b''
-
-                response.delete_session = user.delete_session
-
-        return response
-
-    def create_auth_request(self, session_id, state_id, redirect_url, scopes=(), **params):
         params = dict({
             'response_type': 'code',
             'client_id': self.client_id,
             'redirect_uri': redirect_url,
             'scope': ' '.join({'openid'} | set(scopes)),
             'access_type': 'offline',
-            'state': '#oauth#-{}-{}'.format(session_id, state_id)
+            'state': '#oauth#{}#{}'.format(self.name, self.encrypt(state).decode('ascii'))
         }, **params)
 
         return 'GET', self.endpoints['authorization_endpoint'], params, {}
@@ -169,13 +219,7 @@ class Authentication(common.Authentication):
         return 'POST', self.endpoints['end_session_endpoint'], {}, payload
 
     def create_userinfo_request(self, access_token):
-        userinfo_endpoint = self.endpoints['userinfo_endpoint']
-        if not userinfo_endpoint:
-            raise NotImplementedError()
-
-        payload = {'access_token': access_token}
-
-        return 'POST', userinfo_endpoint, {}, payload
+        return 'POST', self.endpoints.get('userinfo_endpoint'), {}, {'access_token': access_token}
 
     def validate_id_token(self, id_token):
         audiences = set(id_token['aud'].split())
@@ -189,86 +233,121 @@ class Authentication(common.Authentication):
             (id_token['exp'] > time.time())
         )
 
-    def create_credentials(self, id_token):
-        return {k: id_token[k] for k in set(id_token) - self.EXCLUDED_CLAIMS}
-
     def refresh_token(self, refresh_token):
         method, url, params, data = self.create_refresh_token_request(refresh_token)
         return self.send_request(method, url, params, data)
 
-    @staticmethod
-    def is_auth_response(request):
+    def is_auth_response(self, request):
         state = request.params.get('state')
         code = request.params.get('code')
 
-        return code if code and state and state.startswith('#oauth#-') else None
+        if code and state and state.startswith('#oauth#'):
+            state = state.rsplit('#', 1)[1]
+            state = self.decrypt(state.encode('ascii')).decode('ascii')
+            session_id, state_id, action_id = state.split('#')
+        else:
+            code, session_id, state_id, action_id = None, 0, 0, ''
 
-    def get_principal(self, request, session, **params):
-        principal = None
+        return code, int(session_id), int(state_id), action_id
+
+    def to_cookie(self, **credentials):
+        credentials = self.filter_credentials(credentials, {'sub'})
+
+        if self.encrypted:
+            cookie = super(Authentication, self).to_cookie(credentials.pop('sub'), **credentials)
+        else:
+            cookie = generate_jwt(credentials, self.jwk_key, 'HS256')
+
+        return cookie
+
+    def from_cookie(self, cookie, max_age):
+        if self.encrypted:
+            principal, credentials = super(Authentication, self).from_cookie(cookie, max_age)
+            credentials['sub'] = principal
+        else:
+            _, credentials = verify_jwt(cookie.decode('ascii'), self.jwk_key, ['HS256'], checks_optional=True)
+            credentials = self.filter_credentials(credentials, {'sub'})
+
+        return credentials['sub'], credentials
+
+    def retrieve_credentials(self, request, session):
+        if self.cookie or not session:
+            return None, {}
+
+        credentials = session.get('nagare.credentials', {})
+        return credentials.get('sub'), credentials
+
+    @staticmethod
+    def filter_credentials(credentials, to_keep):
+        return {k: v for k, v in credentials.items() if k in to_keep}
+
+    def store_credentials(self, session, credentials):
+        if not self.cookie and session:
+            session['nagare.credentials'] = self.filter_credentials(credentials, {'sub'})
+
+    def request_credentials(self, request, code, action_id):
         credentials = {}
 
-        if session:
-            credentials = session.get('nagare.credentials', {})
+        method, url, params, data = self.create_token_request(request.create_redirect_url(), code)
+        response = self.send_request(method, url, params, data)
+        if response.status_code == 400:
+            error = response.text
+            if response.headers.get('content-type') == 'application/json':
+                response = response.json()
+                if 'error' in response:
+                    error = response['error']
+                    description = response.get('error_description')
+                    if description:
+                        error += ': ' + description
+            self.logger.error(error)
+        elif response.status_code != 200:
+            self.logger.error('Authentication error')
+        else:
+            tokens = response.json()
+            id_token = tokens['id_token']
 
-            code = self.is_auth_response(request)
-            if code:
-                method, url, params, data = self.create_token_request(request.create_redirect_url(), code)
-                response = self.send_request(method, url, params, data)
-                if response.status_code == 400:
-                    error = response.text
-                    if response.headers.get('content-type') == 'application/json':
-                        response = response.json()
-                        if 'error' in response:
-                            error = response['error']
-                            description = response.get('error_description')
-                            if description:
-                                error += ': ' + description
-                    self.logger.error(error)
-                    credentials = {}
-                elif response.status_code != 200:
-                    self.logger.error('Authentication error')
-                    credentials = {}
+            try:
+                headers, _ = process_jwt(id_token)
+                key = self.signing_keys.get_key(headers.get('kid'))
+                _, id_token = verify_jwt(id_token, key, self.algorithms if self.secure else None, checks_optional=True)
+            except JWException as e:
+                self.logger.error('Invalid id_token: ' + e.args[0])
+            else:
+                if not self.validate_id_token(id_token):
+                    self.logger.error('Invalid id_token')
                 else:
-                    tokens = response.json()
+                    credentials = dict(id_token, access_token=tokens['access_token'])
+                    refresh_token = tokens.get('refresh_token')
+                    if refresh_token is not None:
+                        credentials['refresh_token'] = refresh_token
 
-                    id_token = tokens['id_token']
-                    header, _ = id_token.split('.', 1)
-                    header = urlsafe_b64decode(header + '=' * (4 - len(header) % 4))
-                    kid = json.loads(header)['kid']
-                    id_token = jwt.JWT().decode(id_token, self.signing_keys[kid], do_verify=self.secure)
-                    if not self.validate_id_token(id_token):
-                        self.logger.error('Invalid id_token')
-                        credentials = {}
-                    else:
-                        credentials = self.create_credentials(id_token)
-                        credentials['exp'] = int(time.time()) + (id_token['exp'] - id_token['iat'])
-                        credentials['access_token'] = tokens['access_token']
-                        credentials['refresh_token'] = tokens.get('refresh_token')
+                    request.environ['QUERY_STRING'] = action_id + '='
 
-                session['nagare.credentials'] = credentials
+        return credentials
 
-            principal = credentials.get('sub')
+    def get_principal(self, request, response, session, **params):
+        principal, credentials = self.retrieve_credentials(request, session)
+        if not principal:
+            principal, credentials = super(Authentication, self).get_principal(
+                request=request, response=response,
+                **params
+            )
 
-        return principal, credentials
+        if not credentials:
+            code, _, _, action_id = self.is_auth_response(request)
+            if code:
+                credentials = self.request_credentials(request, code, action_id)
 
-    def login(self, h, scopes=(), **params):
-        if self.is_auth_response(h.request):
-            return ''
+        if credentials:
+            self.store_credentials(session, credentials)
 
-        _, url, params, _ = self.create_auth_request(
-            h.session_id, h.state_id,
-            h.request.create_redirect_url(),
-            scopes, **params
-        )
+        return credentials.get('sub'), credentials
 
-        response = h.response
-        response.status_code = 307
-        response.headers['Location'] = url + '?' + urlencode(params)
-
-        return response
+    def login(self, h, scopes=()):
+        return Login(self, h, scopes)
 
     def logout(self, location='', delete_session=True, user=None, access_token=None):
-        """Deconnection of the current user
+        """Disconnection of the current user
 
         Mark the user object as expired
 
@@ -276,32 +355,22 @@ class Authentication(common.Authentication):
           - ``location`` -- location to redirect to
           - ``delete_session`` -- is the session expired too?
         """
-        if user is None:
-            user = security.get_user()
+        status = super(Authentication, self).logout(location, delete_session, user)
 
-        if user is None:
-            return False
-
-        user.logout_location = location
-        user.delete_session = delete_session
-        user.is_expired = True
-
-        status = True
         if access_token is not None:
             method, url, params, data = self.create_end_session_request(access_token)
-
-            if not url:
-                status = True
-            else:
+            if url:
                 response = self.send_request(method, url, params, data)
-                status = (response.status_code == 204)
+                status = status and (response.status_code == 204)
 
         return status
 
     def user_info(self, access_token):
-        request = self.create_userinfo_request(access_token)
-        response = self.send_request(*request)
+        method, url, params, data = self.create_userinfo_request(access_token)
+        if not url:
+            return {}
 
+        response = self.send_request(method, url, params, data)
         return response.json() if response.status_code == 200 else {}
 
 

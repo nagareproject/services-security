@@ -37,7 +37,7 @@ class Authentication(token_auth.Authentication):
         self.realm = realm
         self.nonce_seed = os.urandom(16)
 
-    def fails(self, body=None, content_type='application/html; charset=utf-8', **params):
+    def fails(self, body=None, exc=None, **params):
         """Method called when a permission is denied
 
         In:
@@ -46,22 +46,16 @@ class Authentication(token_auth.Authentication):
         nonce = hashlib.md5(b'%r:%s' % (time.time(), self.nonce_seed)).hexdigest()
         headers = (('WWW-Authenticate', 'Digest realm="{}", nonce="{}", qop="auth"'.format(self.realm, nonce)),)
 
-        super(Authentication, self).fails(body or '', content_type=content_type, headers=headers, **params)
+        super(Authentication, self).fails(body, exc, headers=headers, **params)
 
-    def denies(self, body=None, content_type='application/html; charset=utf-8', **params):
-        """Method called when a permission is denied
-
-        In:
-          - ``details`` -- a ``security.common.denial`` object
-        """
-        super(Authentication, self).denies(body or '', content_type=content_type, **params)
+    login = fails
 
     def authenticate_user(
         self,
         principal, encoding, http_method,
         response=None, realm=b'', uri=b'',
         nonce=b'', nc=b'', cnonce=b'', qop=b'',
-        **data
+        **params
     ):
         """Authentication
 

@@ -30,7 +30,12 @@ setup(
     setup_requires=['setuptools_scm'],
     use_scm_version=True,
     install_requires=[
-        'cryptography', 'requests', 'jwt',
-        'nagare-services', 'nagare-server-http'
+        'cryptography',
+        'requests',
+        'python-jwt',
+        'nagare-partial',
+        'nagare-services',
+        'nagare-server-http',
+        'nagare-renderers-xml'
     ]
 )
