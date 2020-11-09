@@ -23,7 +23,7 @@ except ImportError:
 import requests
 from jwcrypto import jwk, jws
 from jwcrypto.common import JWException
-from python_jwt import generate_jwt, process_jwt, verify_jwt
+from python_jwt import _JWTError, generate_jwt, process_jwt, verify_jwt
 
 from nagare import partial
 from nagare.renderers import xml
@@ -58,12 +58,14 @@ class Login(xml.Component):
 
     def render(self, h):
         if self._action is not None:
-            action_id, params = self.renderer.register_callback(
+            action_id, _ = self.renderer.register_callback(
                 self,
                 self.ACTION_PRIORITY,
                 self._action,
                 self.with_request, *self.args, **self.kw
             )
+        else:
+            action_id = None
 
         _, url, params, _ = self.manager.create_auth_request(
             h.session_id, h.state_id, action_id,
@@ -310,7 +312,7 @@ class Authentication(cookie_auth.Authentication):
                 headers, _ = process_jwt(id_token)
                 key = self.signing_keys.get_key(headers.get('kid'))
                 _, id_token = verify_jwt(id_token, key, self.algorithms if self.secure else None, checks_optional=True)
-            except JWException as e:
+            except (JWException, _JWTError) as e:
                 self.logger.error('Invalid id_token: ' + e.args[0])
             else:
                 if not self.validate_id_token(id_token):
