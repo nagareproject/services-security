@@ -34,10 +34,11 @@ from . import cookie_auth
 class Login(xml.Component):
     ACTION_PRIORITY = 5
 
-    def __init__(self, manager, renderer, scopes):
+    def __init__(self, manager, renderer, scopes, location):
         self.manager = manager
-        self.scopes = scopes
         self.renderer = renderer
+        self.scopes = scopes
+        self.location = location
 
         self._action = None
         self.with_request = False
@@ -69,7 +70,7 @@ class Login(xml.Component):
 
         _, url, params, _ = self.manager.create_auth_request(
             h.session_id, h.state_id, action_id,
-            h.request.create_redirect_url(),
+            self.location or h.request.create_redirect_url(),
             self.scopes
         )
 
@@ -345,8 +346,8 @@ class Authentication(cookie_auth.Authentication):
 
         return credentials.get('sub'), credentials
 
-    def login(self, h, scopes=()):
-        return Login(self, h, scopes)
+    def login(self, h, scopes=(), location=None):
+        return Login(self, h, scopes, location)
 
     def logout(self, location='', delete_session=True, user=None, access_token=None):
         """Disconnection of the current user
