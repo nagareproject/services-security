@@ -328,23 +328,32 @@ class Authentication(cookie_auth.Authentication):
 
         return credentials
 
-    def get_principal(self, request, response, session, **params):
-        principal, credentials = self.retrieve_credentials(request, session)
-        if not principal:
-            principal, credentials = super(Authentication, self).get_principal(
-                request=request, response=response,
-                **params
-            )
+    def get_principal(self, request, response, session, session_id, state_id, **params):
+        new_response = None
+        credentials = {}
+
+        code, _, _, action_id = self.is_auth_response(request)
+        if code:
+            credentials = self.request_credentials(request, code, action_id)
+            if credentials:
+                new_response = request.create_redirect_response(
+                    response=response,
+                    _s=session_id,
+                    _c='%05d' % state_id
+                )
 
         if not credentials:
-            code, _, _, action_id = self.is_auth_response(request)
-            if code:
-                credentials = self.request_credentials(request, code, action_id)
+            principal, credentials = self.retrieve_credentials(request, session)
+            if not principal:
+                principal, credentials, r = super(Authentication, self).get_principal(
+                    request=request, response=response,
+                    **params
+                )
 
         if credentials:
             self.store_credentials(session, credentials)
 
-        return credentials.get('sub'), credentials
+        return credentials.get('sub'), credentials, new_response
 
     def login(self, h, scopes=(), location=None):
         return Login(self, h, scopes, location)
