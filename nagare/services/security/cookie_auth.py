@@ -126,7 +126,7 @@ class Authentication(common.Authentication):
                 except Exception as e:
                     self.logger.error('Cookie decoding: {}'.format(e))
 
-        return principal, credential
+        return principal, credential, None
 
     def cleanup(self, user, request, response, **params):
         if user.is_expired:

@@ -91,7 +91,7 @@ class Authentication(plugin.Plugin):
         set_manager(self)
 
         # Retrieve the data associated with the connected user
-        principal, credentials = self.get_principal(**params)
+        principal, credentials, response = self.get_principal(**params)
         user = self.create_user(principal, **credentials)
         if isinstance(user, User):
             user.credentials.setdefault('principal', principal)
@@ -100,15 +100,17 @@ class Authentication(plugin.Plugin):
 
         set_user(user)
 
-        return user
+        return user, response
 
     @staticmethod
     def cleanup(user, **params):
         pass
 
     def handle_request(self, chain, response, **params):
-        user = self.authenticate(response=response, **params)
-        response = chain.next(response=response, **params)
+        user, response1 = self.authenticate(response=response, **params)
+        response2 = chain.next(response=response1 or response, **params)
+        response = response1 or response2
+
         if user is not None:
             self.cleanup(user, response=response, **params)
 
@@ -130,7 +132,10 @@ class Authentication(plugin.Plugin):
           - ``response`` -- the web response object
 
         Return:
-          - A tuple with the principal (id) of the user and a dictionary of its credentials
+          - A tuple :
+            - principal (id) of the user
+            - dictionary of user credentials
+            - response object to return or `None`
         """
         raise NotImplementedError()
 

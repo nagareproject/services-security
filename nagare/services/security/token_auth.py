@@ -75,7 +75,7 @@ class Authentication(common.Authentication):
                     except (binascii.Error, UnicodeDecodeError):
                         pass
 
-        return principal, {}
+        return principal, {}, None
 
     # --------------------------------------------------------------------------------
 

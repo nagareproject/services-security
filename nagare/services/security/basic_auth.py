@@ -47,14 +47,14 @@ class Authentication(token_auth.Authentication):
         Return:
           - A list with the id of the user and its password
         """
-        principal, _ = super(Authentication, self).get_principal(**params)
+        principal, _, response = super(Authentication, self).get_principal(**params)
 
         if (principal is not None) and (principal.count(':') == 1):
             principal, password = principal.split(':')
         else:
-            principal = password = None
+            principal = password = response = None
 
-        return principal, {'password': password}
+        return principal, {'password': password}, response
 
     # --------------------------------------------------------------------------------
 

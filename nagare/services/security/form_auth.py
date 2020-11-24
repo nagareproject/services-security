@@ -58,7 +58,7 @@ class Authentication(cookie_auth.Authentication):
         name = params.get(self.prefix + '_name')
         password = params.get(self.prefix + '_password')
 
-        return (name, {'password': password}) if (name is not None) and (password is not None) else (None, {})
+        return (name, {'password': password}, None) if (name is not None) and (password is not None) else (None, {}, None)
 
     def get_principal(self, request, **params):
         """Return the data associated with the connected user
@@ -70,14 +70,15 @@ class Authentication(cookie_auth.Authentication):
           - A list with the id of the user and its password
         """
         # First, search into the request parameters
-        principal, credential = self.get_principal_from_params(request.params)
+        principal, credential, response = self.get_principal_from_params(request.params)
         if principal is None:
             # Second, search into the cookie
-            principal, credential = super(Authentication, self).get_principal(request, **params)
+            principal, credential, response = super(Authentication, self).get_principal(request, **params)
             if principal is None:
                 credential = {'password': None}
+                response = None
 
-        return principal, credential
+        return principal, credential, response
 
     # --------------------------------------------------------------------------------
 

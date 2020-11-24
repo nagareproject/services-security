@@ -93,7 +93,7 @@ class Authentication(token_auth.Authentication):
         Return:
           - A tuple with the id of the user and all the challenge response parameters
         """
-        principal, credentials = super(Authentication, self).get_principal(request=request, **params)
+        principal, credentials, response = super(Authentication, self).get_principal(request=request, **params)
 
         encoding = request.accept_charset.best_match(['iso-8859-1', 'utf-8'])
 
@@ -108,7 +108,7 @@ class Authentication(token_auth.Authentication):
             if not self.authenticate_user(principal, **credentials):
                 self.fails()
 
-        return principal, credentials
+        return principal, credentials, response
 
     # --------------------------------------------------------------------------------
 
