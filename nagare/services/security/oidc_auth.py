@@ -70,7 +70,7 @@ class Login(xml.Component):
 
         _, url, params, _ = self.manager.create_auth_request(
             h.session_id, h.state_id, action_id,
-            self.location or h.request.create_redirect_url(),
+            h.request.create_redirect_url(self.location),
             self.scopes
         )
 
@@ -158,24 +158,10 @@ class Authentication(cookie_auth.Authentication):
             verify=self.verify, timeout=self.timeout, proxies=self.proxies
         )
 
-    def handle_start(self, app):
+    def create_discovery_request(self):
         discovery_endpoint = self.endpoints['discovery_endpoint']
-        if discovery_endpoint:
-            r = self.send_request('GET', discovery_endpoint).json()
 
-            self.issuer = r['issuer']
-            self.endpoints = {endpoint: r.get(endpoint) for endpoint in self.ENDPOINTS}
-            jwks_uri = self.endpoints['jwks_uri']
-        else:
-            jwks_uri = self.jwks_uri
-
-        if jwks_uri:
-            certs = self.send_request('GET', r['jwks_uri']).text
-            self.signing_keys.import_keyset(certs)
-
-        missing_endpoints = [endpoint for endpoint in self.REQUIRED_ENDPOINTS if not self.endpoints[endpoint]]
-        if missing_endpoints:
-            self.logger.error('Endpoints without values: ' + ', '.join(missing_endpoints))
+        return (None, None, None, None) if discovery_endpoint is None else ('GET', discovery_endpoint, {}, {})
 
     def create_auth_request(self, session_id, state_id, action_id, redirect_url, scopes=(), **params):
         state = b'%d#%d#%s' % (session_id, state_id, (action_id or '').encode('ascii'))
@@ -223,6 +209,25 @@ class Authentication(cookie_auth.Authentication):
 
     def create_userinfo_request(self, access_token):
         return 'POST', self.endpoints.get('userinfo_endpoint'), {}, {'access_token': access_token}
+
+    def handle_start(self, app):
+        method, url, params, data = self.create_discovery_request()
+        if url:
+            r = self.send_request(method, url, params, data).json()
+
+            self.issuer = r['issuer']
+            self.endpoints = {endpoint: r.get(endpoint) for endpoint in self.ENDPOINTS}
+            jwks_uri = self.endpoints['jwks_uri']
+        else:
+            jwks_uri = self.jwks_uri
+
+        if jwks_uri:
+            certs = self.send_request('GET', r['jwks_uri']).text
+            self.signing_keys.import_keyset(certs)
+
+        missing_endpoints = [endpoint for endpoint in self.REQUIRED_ENDPOINTS if not self.endpoints[endpoint]]
+        if missing_endpoints:
+            self.logger.error('Endpoints without values: ' + ', '.join(missing_endpoints))
 
     def validate_id_token(self, id_token):
         audiences = set(id_token['aud'].split())
