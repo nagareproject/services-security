@@ -397,6 +397,8 @@ class AuthenticationWithDiscovery(Authentication):
         discovery_endpoint='string(default="{base_url}/.well-known/openid-configuration")'
     )
 
+# ---------------------------------------------------------------------------------------------------------------------
+
 
 class KeycloakAuthentication(Authentication):
     CONFIG_SPEC = dict(
@@ -410,4 +412,13 @@ class GoogleAuthentication(AuthenticationWithDiscovery):
     CONFIG_SPEC = dict(
         AuthenticationWithDiscovery.CONFIG_SPEC,
         host='string(default="accounts.google.com")'
+    )
+
+
+class AzureAuthentication(Authentication):
+    CONFIG_SPEC = dict(
+        AuthenticationWithDiscovery.CONFIG_SPEC,
+        host='string(default="login.microsoftonline.com")',
+        discovery_endpoint='string(default="{base_url}/{tenant}/v2.0/.well-known/openid-configuration")',
+        tenant='string(default="common")'
     )
