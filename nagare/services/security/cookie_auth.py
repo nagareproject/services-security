@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2020 Net-ng.
+# Copyright (c) 2008-2021 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -61,7 +61,7 @@ class Authentication(common.Authentication):
             method of the ``WebOb`` response object
             (see https://docs.pylonsproject.org/projects/webob/en/stable/api/response.html#webob.response.Response.set_cookie)
         """
-        super(Authentication, self).__init__(name, dist, cookie=cookie, key=key, **config)
+        super(Authentication, self).__init__(name, dist, cookie=cookie.copy(), key=key, **config)
 
         self.encrypted = cookie.pop('encrypt')
         self.cookie = cookie if cookie.pop('activated') else None

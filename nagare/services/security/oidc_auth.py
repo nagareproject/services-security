@@ -1,7 +1,7 @@
 # Encoding: utf-8
 
 # --
-# Copyright (c) 2008-2020 Net-ng.
+# Copyright (c) 2008-2021 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -122,7 +122,6 @@ class Authentication(cookie_auth.Authentication):
             client_id=client_id, client_secret=client_secret, secure=secure, algorithms=algorithms,
             host=host, port=port, ssl=ssl, verify=verify, timeout=timeout, proxy=proxy,
             key=key, issuer=issuer,
-            services_service=services_service,
             **config
         )
         self.key = key or urlsafe_b64encode(os.urandom(32)).decode('ascii')
