@@ -86,7 +86,7 @@ class Authentication(plugin.Plugin):
 
     def authenticate(self, **params):
         if get_user() is not None:
-            return None
+            return None, None
 
         set_manager(self)
 
