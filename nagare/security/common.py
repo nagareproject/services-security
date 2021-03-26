@@ -9,7 +9,7 @@
 # this distribution.
 # --
 
-from nagare import local, partial
+from nagare import local
 
 
 __all__ = (
@@ -131,13 +131,18 @@ def check_permissions(permissions, subject=None, msg=None, exc=None):
     get_manager().check_permissions(get_user(), permissions, subject, msg, exc)
 
 
-def guarded_call(f, __permissions, __subject, __msg, __exc, self, *args, **kw):
-    check_permissions(__permissions, self if __subject is None else __subject, __msg, __exc)
-    return f(self, *args, **kw)
+def guarded_call(f, __permissions, __subject, __msg, __exc, *args, **kw):
+    if __subject is not _marker:
+        subject = __subject
+    else:
+        subject = args[0] if args else None
+
+    check_permissions(__permissions, subject, __msg, __exc)
+    return f(*args, **kw)
 
 
-def permissions(permissions, subject=None, msg=None, exc=None):
-    return lambda f: partial.Decorator(f, guarded_call, permissions, subject, msg, exc)
+def permissions(permissions, subject=_marker, msg=None, exc=None):
+    return lambda f: lambda *args, **kw: guarded_call(f, permissions, subject, msg, exc, *args, **kw)
 
 # ---------------------------------------------------------------------------
 
