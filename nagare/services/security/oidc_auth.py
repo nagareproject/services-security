@@ -171,7 +171,7 @@ class Authentication(cookie_auth.Authentication):
             'redirect_uri': redirect_url,
             'scope': ' '.join({'openid'} | set(scopes)),
             'access_type': 'offline',
-            'state': '#oauth#{}#{}'.format(self.name, self.encrypt(state).decode('ascii'))
+            'state': '#{}#{}'.format(self.name, self.encrypt(state).decode('ascii'))
         }, **params)
 
         return 'GET', self.endpoints['authorization_endpoint'], params, {}
@@ -245,15 +245,18 @@ class Authentication(cookie_auth.Authentication):
         return self.send_request(method, url, params, data)
 
     def is_auth_response(self, request):
-        state = request.params.get('state')
+        code, session_id, state_id, action_id = None, 0, 0, ''
+
+        state = request.params.get('state', '')
         code = request.params.get('code')
 
-        if code and state and state.startswith('#oauth#'):
+        if code and state.startswith('#'):
             state = state.rsplit('#', 1)[1]
-            state = self.decrypt(state.encode('ascii')).decode('ascii')
-            session_id, state_id, action_id = state.split('#')
-        else:
-            code, session_id, state_id, action_id = None, 0, 0, ''
+            try:
+                state = self.decrypt(state.encode('ascii')).decode('ascii')
+                session_id, state_id, action_id = state.split('#')
+            except cookie_auth.InvalidToken:
+                code = None
 
         return code, int(session_id), int(state_id), action_id
 
@@ -328,7 +331,8 @@ class Authentication(cookie_auth.Authentication):
                     if refresh_token is not None:
                         credentials['refresh_token'] = refresh_token
 
-                    request.environ['QUERY_STRING'] = action_id + '='
+                    if action_id:
+                        request.environ['QUERY_STRING'] = action_id + '='
 
         return credentials
 
