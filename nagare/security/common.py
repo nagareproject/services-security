@@ -23,6 +23,7 @@ _marker = object()
 
 
 class PermissionsManager(object):
+    name = 'default_security_manager'
 
     def fails(self, body=None, exc=None, **params):
         """Method called when authentication failed
