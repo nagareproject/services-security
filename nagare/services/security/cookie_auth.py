@@ -18,7 +18,7 @@ sent back on each request by the browser.
 """
 
 import json
-import base64
+from base64 import urlsafe_b64encode, urlsafe_b64decode
 
 from nagare import security
 from cryptography.fernet import Fernet, InvalidToken
@@ -92,11 +92,11 @@ class Authentication(common.Authentication):
     def to_cookie(self, principal, **credentials):
         cookie = json.dumps((principal, credentials), separators=(',', ':')).encode('utf-8')
 
-        return self.encrypt(cookie) if self.encrypted else base64.urlsafe_b64encode(cookie)
+        return self.encrypt(cookie) if self.encrypted else urlsafe_b64encode(cookie)
 
     def from_cookie(self, cookie, max_age):
         try:
-            cookie = self.decrypt(cookie, max_age) if self.encrypted else base64.urlsafe_b64decode(cookie)
+            cookie = self.decrypt(cookie, max_age) if self.encrypted else urlsafe_b64decode(cookie)
         except InvalidToken:
             self.logger.debug("Invalid or expired cookie '{}'".format(cookie))
             principal = None
@@ -164,11 +164,10 @@ class Authentication(common.Authentication):
         """
         if user is None:
             user = security.get_user()
-            if user is None:
-                return False
 
-        user.logout_location = location
-        user.delete_session = delete_session
-        user.is_expired = True
+        if user is not None:
+            user.logout_location = location
+            user.delete_session = delete_session
+            user.is_expired = True
 
-        return True
+        return user
