@@ -35,6 +35,7 @@ setup(
         'python-jwt',
         'nagare-partial',
         'nagare-services',
+        'nagare-services-logging',
         'nagare-server-http',
         'nagare-renderers-xml'
     ]

@@ -12,6 +12,7 @@
 import os
 import time
 import copy
+import threading
 from base64 import urlsafe_b64encode
 
 try:
@@ -25,7 +26,7 @@ from jwcrypto import jwk, jws
 from jwcrypto.common import JWException
 from python_jwt import _JWTError, generate_jwt, process_jwt, verify_jwt
 
-from nagare import partial
+from nagare import partial, log
 from nagare.renderers import xml
 
 from . import cookie_auth
@@ -85,7 +86,7 @@ class Authentication(cookie_auth.Authentication):
     LOAD_PRIORITY = cookie_auth.Authentication.LOAD_PRIORITY + 1
 
     REQUIRED_ENDPOINTS = {'authorization_endpoint', 'token_endpoint'}
-    ENDPOINTS = REQUIRED_ENDPOINTS | {'discovery_endpoint', 'userinfo_endpoint', 'end_session_endpoint', 'jwks_uri'}
+    ENDPOINTS = REQUIRED_ENDPOINTS | {'discovery_endpoint', 'userinfo_endpoint', 'end_session_endpoint'}
     EXCLUDED_CLAIMS = {'iss', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'acr', 'amr', 'azp'} | {'session_state', 'typ', 'nbf'}
 
     CONFIG_SPEC = dict(
@@ -101,7 +102,7 @@ class Authentication(cookie_auth.Authentication):
         secure='boolean(default=True, help="JWT signature verification")',
         algorithms='string_list(default=list({}), help="accepted signing/encryption algorithms")'.format(', '.join(jws.default_allowed_algs)),
         key='string(default=None, help="cookie encoding key")',
-        jwks_uri='string(default=None, help="JWK keys set document',
+        jwks_uri='string(default=None, help="JWK keys set document")',
         issuer='string(default=None, help="server identifier")'
     )
     CONFIG_SPEC['cookie']['activated'] = 'boolean(default=False)'
@@ -113,7 +114,7 @@ class Authentication(cookie_auth.Authentication):
         name, dist,
         client_id, client_secret='', secure=True, algorithms=jws.default_allowed_algs,
         host='localhost', port=None, ssl=True, verify=True, timeout=5, proxy=None,
-        key=None, issuer=None,
+        key=None, jwks_uri=None, issuer=None,
         services_service=None,
         **config
     ):
@@ -121,7 +122,7 @@ class Authentication(cookie_auth.Authentication):
             super(Authentication, self).__init__, name, dist,
             client_id=client_id, client_secret=client_secret, secure=secure, algorithms=algorithms,
             host=host, port=port, ssl=ssl, verify=verify, timeout=timeout, proxy=proxy,
-            key=key, issuer=issuer,
+            key=key, jwks_uri=jwks_uri, issuer=issuer,
             **config
         )
         self.key = key or urlsafe_b64encode(os.urandom(32)).decode('ascii')
@@ -136,6 +137,9 @@ class Authentication(cookie_auth.Authentication):
         self.proxies = {'http': proxy, 'https': proxy} if proxy else None
 
         self.issuer = issuer
+        self.jwks_uri = jwks_uri
+        self.jwks_expiration = None
+        self.jwks_lock = threading.Lock()
         self.signing_keys = jwk.JWKSet()
 
         if not port:
@@ -152,10 +156,12 @@ class Authentication(cookie_auth.Authentication):
         self.endpoints = {endpoint: (config[endpoint] or '').format(**endpoint_params) for endpoint in self.ENDPOINTS}
 
     def send_request(self, method, url, params=None, data=None):
-        return requests.request(
+        r = requests.request(
             method, url, params=params or {}, data=data or {},
             verify=self.verify, timeout=self.timeout, proxies=self.proxies
         )
+        r.raise_for_status()
+        return r
 
     def create_discovery_request(self):
         discovery_endpoint = self.endpoints['discovery_endpoint']
@@ -209,6 +215,31 @@ class Authentication(cookie_auth.Authentication):
     def create_userinfo_request(self, access_token):
         return 'POST', self.endpoints.get('userinfo_endpoint'), {}, {'access_token': access_token}
 
+    def fetch_keys(self):
+        if self.jwks_uri and self.jwks_expiration and (time.time() > self.jwks_expiration):
+            with self.jwks_lock:
+                logger = log.get_logger('.keys', self.logger)
+
+                certs = self.send_request('GET', self.jwks_uri)
+                new_keys = set(k['kid'] for k in certs.json()['keys'])
+                keys = {key.key_id for key in self.signing_keys['keys']}
+                if new_keys != keys:
+                    logger.debug('New signing keys fetched: {} -> {}'.format(sorted(keys), sorted(new_keys)))
+                    self.signing_keys = jwk.JWKSet.from_json(certs.text)
+                else:
+                    logger.debug('Same signing keys fetched: {}'.format(sorted(keys)))
+
+                cache_controls = [v.split('=') for v in certs.headers['Cache-Control'].split(',') if '=' in v]
+                cache_controls = {k.strip(): v.strip() for k, v in cache_controls}
+                max_age = cache_controls.get('max-age')
+
+                if max_age and max_age.isdigit():
+                    logger.debug('Signing keys max age: {}'.format(max_age))
+                    self.jwks_expiration = time.time() + int(max_age)
+                else:
+                    logger.debug('No expiration date for signing keys')
+                    self.jwks_expiration = None
+
     def handle_start(self, app):
         method, url, params, data = self.create_discovery_request()
         if url:
@@ -216,17 +247,21 @@ class Authentication(cookie_auth.Authentication):
 
             self.issuer = r['issuer']
             self.endpoints = {endpoint: r.get(endpoint) for endpoint in self.ENDPOINTS}
-            jwks_uri = self.endpoints['jwks_uri']
-        else:
-            jwks_uri = self.jwks_uri
+            jwks_uri = r.get('jwks_uri')
+            if jwks_uri and not self.jwks_uri:
+                self.jwks_uri = jwks_uri
 
-        if jwks_uri:
-            certs = self.send_request('GET', r['jwks_uri']).text
-            self.signing_keys.import_keyset(certs)
+        self.jwks_expiration = time.time() - 1
 
         missing_endpoints = [endpoint for endpoint in self.REQUIRED_ENDPOINTS if not self.endpoints[endpoint]]
         if missing_endpoints:
             self.logger.error('Endpoints without values: ' + ', '.join(missing_endpoints))
+
+        self.fetch_keys()
+
+    def handle_request(self, chain, **params):
+        self.fetch_keys()
+        return super(Authentication, self).handle_request(chain, **params)
 
     def validate_id_token(self, id_token):
         audiences = set(id_token['aud'].split())
@@ -280,7 +315,7 @@ class Authentication(cookie_auth.Authentication):
 
         return credentials['sub'], credentials
 
-    def retrieve_credentials(self, request, session):
+    def retrieve_credentials(self, session):
         if self.cookie or not session:
             return None, {}
 
@@ -351,7 +386,7 @@ class Authentication(cookie_auth.Authentication):
                 )
 
         if not credentials:
-            principal, credentials = self.retrieve_credentials(request, session)
+            principal, credentials = self.retrieve_credentials(session)
             if not principal:
                 principal, credentials, r = super(Authentication, self).get_principal(
                     request=request, response=response,
