@@ -94,7 +94,7 @@ class Authentication(cookie_auth.Authentication):
         host='string(default="localhost", help="server hostname")',
         port='integer(default=None, help="server port")',
         ssl='boolean(default=True, help="HTTPS protocol")',
-        proxy='string(default=None, help="HTTP/S proxy to use)',
+        proxy='string(default=None, help="HTTP/S proxy to use")',
         verify='boolean(default=True, help="SSL certificate verification")',
         timeout='integer(default=5, help="communication timeout")',
         client_id='string(help="application identifier")',
