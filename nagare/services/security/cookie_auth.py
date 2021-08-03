@@ -63,9 +63,9 @@ class Authentication(common.Authentication):
         """
         super(Authentication, self).__init__(name, dist, cookie=cookie.copy(), key=key, **config)
 
+        self.key = key or Fernet.generate_key()
         self.encrypted = cookie.pop('encrypt')
         self.cookie = cookie if cookie.pop('activated') else None
-        self.cipher = Fernet(key or Fernet.generate_key())
 
     def fails(self, body=None, exc=None, **params):
         """Method called when authentication failed
@@ -84,10 +84,10 @@ class Authentication(common.Authentication):
         super(Authentication, self).denies(body, exc or HTTPForbidden, **params)
 
     def encrypt(self, data):
-        return self.cipher.encrypt(data)
+        return Fernet(self.key).encrypt(data)
 
     def decrypt(self, data, max_age=None):
-        return self.cipher.decrypt(data, max_age)
+        return Fernet(self.key).decrypt(data, max_age)
 
     def to_cookie(self, principal, **credentials):
         cookie = json.dumps((principal, credentials), separators=(',', ':')).encode('utf-8')
