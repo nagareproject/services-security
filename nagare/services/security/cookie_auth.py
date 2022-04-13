@@ -39,7 +39,7 @@ class Authentication(common.Authentication):
             'encrypt': 'boolean(default=True)',
             'name': 'string(default="nagare-security")',
             'max_age': 'integer(default=None)',
-            'path': 'string(default="$app_url/")',
+            'path': 'string(default="$app_url")',
             'domain': 'string(default=None)',
             'secure': 'boolean(default=True)',
             'httponly': 'boolean(default=True)',
