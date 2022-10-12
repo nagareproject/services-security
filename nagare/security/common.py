@@ -9,6 +9,8 @@
 # this distribution.
 # --
 
+from functools import update_wrapper
+
 from nagare import local
 
 
@@ -143,7 +145,10 @@ def guarded_call(f, __permissions, __subject, __msg, __exc, *args, **kw):
 
 
 def permissions(permissions, subject=_marker, msg=None, exc=None):
-    return lambda f: lambda *args, **kw: guarded_call(f, permissions, subject, msg, exc, *args, **kw)
+    return lambda f: update_wrapper(
+        lambda *args, **kw: guarded_call(f, permissions, subject, msg, exc, *args, **kw),
+        f
+    )
 
 # ---------------------------------------------------------------------------
 
