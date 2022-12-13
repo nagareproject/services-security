@@ -33,7 +33,6 @@ class Authentication(common.Authentication):
     CONFIG_SPEC = dict(
         common.Authentication.CONFIG_SPEC,
         key='string(default=None, help="cookie encryption key")',
-
         cookie={
             'activated': 'boolean(default=True)',
             'encrypt': 'boolean(default=True)',
@@ -45,8 +44,8 @@ class Authentication(common.Authentication):
             'httponly': 'boolean(default=True)',
             'comment': 'string(default=None)',
             'overwrite': 'boolean(default=False)',
-            'samesite': 'string(default="lax")'
-        }
+            'samesite': 'string(default="lax")',
+        },
     )
 
     def __init__(self, name, dist, cookie, key=None, **config):
