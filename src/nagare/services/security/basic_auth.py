@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -7,22 +7,20 @@
 # this distribution.
 # --
 
-"""Authentication manager for the basic HTTP authentication scheme"""
+"""Authentication manager for the basic HTTP authentication scheme."""
 
 from . import token_auth
 
 
 class Authentication(token_auth.Authentication):
-    """Authentication manager for the basic HTTP authentication scheme
-    """
+    """Authentication manager for the basic HTTP authentication scheme."""
+
     CONFIG_SPEC = dict(
-        token_auth.Authentication.CONFIG_SPEC,
-        scheme='string(default="Basic")',
-        realm='string(default="")'
+        token_auth.Authentication.CONFIG_SPEC, scheme='string(default="Basic")', realm='string(default="")'
     )
 
     def __init__(self, name, dist, realm='', services_service=None, **config):
-        """Initialization
+        """Initialization.
 
         In:
           - ``realm`` -- authentication realm
@@ -31,7 +29,7 @@ class Authentication(token_auth.Authentication):
         self.realm = realm
 
     def fails(self, body=None, exc=None, **params):
-        """Method called when authentication failed
+        """Method called when authentication failed.
 
         In:
           - ``details`` -- a ``security.common.denial`` object
@@ -42,7 +40,7 @@ class Authentication(token_auth.Authentication):
     login = fails
 
     def get_principal(self, **params):
-        """Return the data associated with the connected user
+        """Return the data associated with the connected user.
 
         Return:
           - A list with the id of the user and its password
@@ -59,7 +57,7 @@ class Authentication(token_auth.Authentication):
     # --------------------------------------------------------------------------------
 
     def create_user(self, principal, password):
-        """Authenticate and create the user
+        """Authenticate and create the user.
 
         Call ``self.fails()`` on wrong password
 

@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -7,7 +7,7 @@
 # this distribution.
 # --
 
-"""Simple form based authentication manager
+"""Simple form based authentication manager.
 
 The id and password of the user are first searched into the parameters of
 the request. So, first, set a form with the fields names ``__ac_name``
@@ -23,15 +23,15 @@ from . import cookie_auth
 
 
 class Authentication(cookie_auth.Authentication):
-    """Simple form based authentication"""
+    """Simple form based authentication."""
 
     CONFIG_SPEC = dict(
         copy.deepcopy(cookie_auth.Authentication.CONFIG_SPEC),
-        prefix='string(default="__ac", help="`_name` and `_password` fields prefix")'
+        prefix='string(default="__ac", help="`_name` and `_password` fields prefix")',
     )
 
     def __init__(self, name, dist, prefix='__ac', **config):
-        """Initialization
+        """Initialization.
 
         In:
           - ``prefix`` -- prefix of the names of the user id and password fields
@@ -46,8 +46,7 @@ class Authentication(cookie_auth.Authentication):
         self.prefix = prefix
 
     def get_principal_from_params(self, params):
-        """Search the data associated with the connected user into the request
-        parameter
+        """Search the data associated with the connected user into the request parameter.
 
         In:
           - ``params`` -- the request parameters
@@ -58,10 +57,12 @@ class Authentication(cookie_auth.Authentication):
         name = params.get(self.prefix + '_name')
         password = params.get(self.prefix + '_password')
 
-        return (name, {'password': password}, None) if (name is not None) and (password is not None) else (None, {}, None)
+        return (
+            (name, {'password': password}, None) if (name is not None) and (password is not None) else (None, {}, None)
+        )
 
     def get_principal(self, request, **params):
-        """Return the data associated with the connected user
+        """Return the data associated with the connected user.
 
         In:
           - ``request`` -- the WebOb request object
@@ -83,7 +84,8 @@ class Authentication(cookie_auth.Authentication):
     # --------------------------------------------------------------------------------
 
     def create_user(self, principal, password, **credentials):
-        """
+        """Return an applicative user object.
+
         In:
           - ``principal`` -- the user id. Can be ``None``
           - ``password`` -- the user password. Can be ``None``

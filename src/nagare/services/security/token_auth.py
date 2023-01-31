@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -7,35 +7,32 @@
 # this distribution.
 # --
 
-"""Authentication manager for token based HTTP authentication"""
+"""Authentication manager for token based HTTP authentication."""
 
 import binascii
-from webob. exc import HTTPUnauthorized, HTTPForbidden
+
+from webob.exc import HTTPForbidden, HTTPUnauthorized
 
 from . import common
 
 
 class Authentication(common.Authentication):
-    """Tokens based authentication manager
-    """
+    """Tokens based authentication manager."""
+
     CONFIG_SPEC = dict(
-        common.Authentication.CONFIG_SPEC,
-        scheme='string(default="Bearer")',
-        base64_encoded='boolean(default=True)'
+        common.Authentication.CONFIG_SPEC, scheme='string(default="Bearer")', base64_encoded='boolean(default=True)'
     )
 
     def __init__(self, name, dist, scheme, base64_encoded, services_service, **config):
         services_service(
-            super(Authentication, self).__init__, name, dist,
-            scheme=scheme, base64_encoded=base64_encoded,
-            **config
+            super(Authentication, self).__init__, name, dist, scheme=scheme, base64_encoded=base64_encoded, **config
         )
 
         self.scheme = scheme
         self.base64_encoded = base64_encoded
 
     def fails(self, body=None, exc=None, **params):
-        """Method called when authentication failed
+        """Method called when authentication failed.
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
@@ -43,7 +40,7 @@ class Authentication(common.Authentication):
         super(Authentication, self).fails(body, exc or HTTPUnauthorized, **params)
 
     def denies(self, body=None, exc=None, **params):
-        """Method called when a permission is denied
+        """Method called when a permission is denied.
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
@@ -51,7 +48,7 @@ class Authentication(common.Authentication):
         super(Authentication, self).denies(body, exc or HTTPForbidden, **params)
 
     def get_principal(self, request, **params):
-        """Return the data associated with the connected user
+        """Return the data associated with the connected user.
 
         In:
           - ``request`` -- the WebOb request object
@@ -73,14 +70,14 @@ class Authentication(common.Authentication):
                     try:
                         principal = binascii.a2b_base64(received_principal).decode(encoding)
                     except (binascii.Error, UnicodeDecodeError):
-                        pass
+                        pass  # noqa: S110
 
         return principal, {}, None
 
     # --------------------------------------------------------------------------------
 
     def create_user(self, token):
-        """The user is validated, create the user object
+        """The user is validated, create the user object.
 
         In:
           - ``token`` -- the user id

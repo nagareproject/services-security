@@ -1,7 +1,7 @@
 # Encoding: utf-8
 
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -13,12 +13,23 @@ from functools import update_wrapper
 
 from nagare import local
 
-
 __all__ = (
-    'get_manager', 'set_manager', 'get_user', 'set_user',
-    'SecurityException', 'PermissionsManager',
-    'has_permissions', 'check_permissions', 'permissions',
-    'User', 'Permission', 'Private', 'Public', 'private', 'public', 'Denial'
+    'get_manager',
+    'set_manager',
+    'get_user',
+    'set_user',
+    'SecurityException',
+    'PermissionsManager',
+    'has_permissions',
+    'check_permissions',
+    'permissions',
+    'User',
+    'Permission',
+    'Private',
+    'Public',
+    'private',
+    'public',
+    'Denial',
 )
 
 _marker = object()
@@ -28,7 +39,7 @@ class PermissionsManager(object):
     name = 'default_security_manager'
 
     def fails(self, body=None, exc=None, **params):
-        """Method called when authentication failed
+        """Method called when authentication failed.
 
         In:
           - ``detail`` -- a ``security.Denial`` object
@@ -36,7 +47,7 @@ class PermissionsManager(object):
         raise (exc or UnauthorizedException)(body, **params)
 
     def denies(self, body=None, exc=None, **params):
-        """Method called when a permission is denied
+        """Method called when a permission is denied.
 
         In:
           - ``detail`` -- a ``security.Denial`` object
@@ -44,8 +55,7 @@ class PermissionsManager(object):
         raise (exc or ForbiddenException)(body, **params)
 
     def has_permissions(self, user, perms, subject, msg=None):
-        """The ``has_permission()`` generic method
-        and default implementation: by default all accesses are denied
+        """The ``has_permission()`` generic method and default implementation: by default all accesses are denied.
 
         In:
           - ``user`` -- user to check the permission for
@@ -87,6 +97,7 @@ class PermissionsManager(object):
     def has_permission(user, perm, subject):
         return False
 
+
 # ---------------------------------------------------------------------------
 
 
@@ -106,6 +117,7 @@ def get_user(only_valid=True):
 def set_user(user):
     local.request.user = user
 
+
 # ---------------------------------------------------------------------------
 
 
@@ -123,6 +135,7 @@ class ForbiddenException(SecurityException):
     def __init__(self, body=None):
         super(ForbiddenException, self).__init__('Access forbidden' if body is None else body)
 
+
 # ---------------------------------------------------------------------------
 
 
@@ -135,27 +148,22 @@ def check_permissions(permissions, subject=None, msg=None, exc=None):
 
 
 def guarded_call(f, __permissions, __subject, __msg, __exc, *args, **kw):
-    if __subject is not _marker:
-        subject = __subject
-    else:
-        subject = args[0] if args else None
+    subject = __subject if __subject is not _marker else (args[0] if args else None)
 
     check_permissions(__permissions, subject, __msg, __exc)
     return f(*args, **kw)
 
 
 def permissions(permissions, subject=_marker, msg=None, exc=None):
-    return lambda f: update_wrapper(
-        lambda *args, **kw: guarded_call(f, permissions, subject, msg, exc, *args, **kw),
-        f
-    )
+    return lambda f: update_wrapper(lambda *args, **kw: guarded_call(f, permissions, subject, msg, exc, *args, **kw), f)
+
 
 # ---------------------------------------------------------------------------
 
 
 class User(object):
-    """Base class for the user objects
-    """
+    """Base class for the user objects."""
+
     def __init__(self, id=None, **credentials):
         self.id = id
         self.credentials = credentials
@@ -166,18 +174,17 @@ class User(object):
         self._previous_user = None
 
     def __enter__(self):
-        """Push this user to the stack
-        """
+        """Push this user to the stack."""
         self._previous_user = get_user()
         set_user(self)
 
     def __exit__(self, *args, **kw):
-        """Pop this user from the stack
-        """
+        """Pop this user from the stack."""
         set_user(self._previous_user)
 
     def __repr__(self):
         return '<User {}>'.format(self.id)
+
 
 # ---------------------------------------------------------------------------
 
@@ -185,32 +192,30 @@ class User(object):
 # The application can used anything for the permission objects
 # So the following pre-defined permissions are optional helpers
 
+
 class Permission(object):
-    """Base class of all the permissions
-    """
-    pass
+    """Base class of all the permissions."""
 
 
 class Private(Permission):
-    """To define the ``private`` permission singleton
+    """To define the ``private`` permission singleton.
 
     Nobody has access to objects protected with this permission
     """
+
     @staticmethod
     def __nonzero__():
-        """Evaluated to ``False`` in a boolean context
-        """
+        """Evaluated to ``False`` in a boolean context."""
         return False
 
     __bool__ = __nonzero__
 
 
 class Public(Permission):
-    """To define the ``public`` permission singleton
+    """To define the ``public`` permission singleton.
 
     Every body has access to objects protected with this permission
     """
-    pass
 
 
 # The singleton permissions
@@ -219,12 +224,13 @@ public = Public()
 
 
 class Denial(object):
-    """Type of the objects return when an access is denied
+    """Type of the objects return when an access is denied.
 
     In a boolean context, it is evaluated to ``False``
     """
+
     def __init__(self, detail=None):
-        """Initialisation
+        """Initialisation.
 
         In:
           - ``message`` -- denial description
@@ -233,8 +239,7 @@ class Denial(object):
 
     @staticmethod
     def __nonzero__():
-        """Evaluated to ``False`` in a boolean context
-        """
+        """Evaluated to ``False`` in a boolean context."""
         return False
 
     __bool__ = __nonzero__

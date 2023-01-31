@@ -1,7 +1,7 @@
 # Encoding: utf-8
 
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -9,22 +9,17 @@
 # this distribution.
 # --
 
+from nagare.security import PermissionsManager, User, get_user, set_manager, set_user
 from nagare.services import plugin
-
-from nagare.security import (
-    PermissionsManager,
-    set_manager,
-    set_user, get_user, User
-)
 
 
 class Authentication(plugin.Plugin, PermissionsManager):
-    """An ``Authentication`` object identify, authenticate and create the
-    user objects
+    """An ``Authentication`` object identify, authenticate and create the user objects.
 
     .. note::
         By definition, the user object ``None`` is the anonymous user
     """
+
     LOAD_PRIORITY = 102
 
     def authenticate(self, **params):
@@ -62,7 +57,7 @@ class Authentication(plugin.Plugin, PermissionsManager):
     # --------------------------------------------------------------------------------
 
     def get_principal(self, **params):
-        """Return the data associated with the connected user
+        """Return the data associated with the connected user.
 
         In:
           - ``request`` -- the web request object

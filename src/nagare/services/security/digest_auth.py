@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -7,27 +7,27 @@
 # this distribution.
 # --
 
-"""Authentication manager for the digest HTTP authentication scheme"""
+"""Authentication manager for the digest HTTP authentication scheme."""
 
+import hashlib
 import os
 import time
-import hashlib
 
 from . import token_auth
 
 
 class Authentication(token_auth.Authentication):
-    """Authentication manager for the digest HTTP authentication scheme
-    """
+    """Authentication manager for the digest HTTP authentication scheme."""
+
     CONFIG_SPEC = dict(
         token_auth.Authentication.CONFIG_SPEC,
         scheme='string(default="Digest")',
         base64_encoded='boolean(default=False)',
-        realm='string(default="")'
+        realm='string(default="")',
     )
 
     def __init__(self, name, dist, realm='', services_service=None, **config):
-        """Initialization
+        """Initialization.
 
         In:
           - ``realm`` -- authentication realm
@@ -38,7 +38,7 @@ class Authentication(token_auth.Authentication):
         self.nonce_seed = os.urandom(16)
 
     def fails(self, body=None, exc=None, **params):
-        """Method called when a permission is denied
+        """Method called when a permission is denied.
 
         In:
           - ``details`` -- a ``security.common.denial`` object
@@ -52,12 +52,19 @@ class Authentication(token_auth.Authentication):
 
     def authenticate_user(
         self,
-        principal, encoding, http_method,
-        response=None, realm=b'', uri=b'',
-        nonce=b'', nc=b'', cnonce=b'', qop=b'',
-        **params
+        principal,
+        encoding,
+        http_method,
+        response=None,
+        realm=b'',
+        uri=b'',
+        nonce=b'',
+        nc=b'',
+        cnonce=b'',
+        qop=b'',
+        **params,
     ):
-        """Authentication
+        """Authentication.
 
         In:
           - ``username`` -- user id
@@ -84,7 +91,7 @@ class Authentication(token_auth.Authentication):
         return hashlib.md5(sig).hexdigest().encode(encoding) == response
 
     def get_principal(self, request, response, **params):
-        """Return the data associated with the connected user
+        """Return the data associated with the connected user.
 
         In:
           - ``request`` -- the WebOb request object
@@ -116,7 +123,7 @@ class Authentication(token_auth.Authentication):
         raise NotImplementedError()
 
     def create_user(self, principal, **credentials):
-        """The user is validated, create the user object
+        """The user is validated, create the user object.
 
         In:
           - ``principal`` -- the user id

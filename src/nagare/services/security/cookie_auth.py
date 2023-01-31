@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -7,7 +7,7 @@
 # this distribution.
 # --
 
-"""Simple form based authentication manager
+"""Simple form based authentication manager.
 
 The id and password of the user are first searched into the parameters of
 the request. So, first, set a form with the fields names ``__ac_name``
@@ -17,18 +17,18 @@ Then the user id and the password are automatically kept into a cookie,
 sent back on each request by the browser.
 """
 
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 import json
-from base64 import urlsafe_b64encode, urlsafe_b64decode
 
-from nagare import security
 from cryptography.fernet import Fernet, InvalidToken
-from webob.exc import HTTPUnauthorized, HTTPForbidden
+from nagare import security
+from webob.exc import HTTPForbidden, HTTPUnauthorized
 
 from . import common
 
 
 class Authentication(common.Authentication):
-    """Simple cookie based authentication"""
+    """Simple cookie based authentication."""
 
     CONFIG_SPEC = dict(
         common.Authentication.CONFIG_SPEC,
@@ -49,7 +49,7 @@ class Authentication(common.Authentication):
     )
 
     def __init__(self, name, dist, cookie, key=None, **config):
-        """Initialization
+        """Initialization.
 
         In:
           - ``prefix`` -- prefix of the names of the user id and password fields
@@ -67,7 +67,7 @@ class Authentication(common.Authentication):
         self.cookie = cookie if cookie.pop('activated') else None
 
     def fails(self, body=None, exc=None, **params):
-        """Method called when authentication failed
+        """Method called when authentication failed.
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
@@ -75,7 +75,7 @@ class Authentication(common.Authentication):
         super(Authentication, self).fails(body, exc or HTTPUnauthorized, **params)
 
     def denies(self, body=None, exc=None, **params):
-        """Method called when a permission is denied
+        """Method called when a permission is denied.
 
         In:
           - ``detail`` -- a ``security.common.denial`` object
@@ -106,7 +106,7 @@ class Authentication(common.Authentication):
         return principal, credentials
 
     def get_principal(self, request, **params):
-        """Search the data associated with the connected user into the cookies
+        """Search the data associated with the connected user into the cookies.
 
         In:
           - ``cookies`` -- cookies dictionary
@@ -153,7 +153,7 @@ class Authentication(common.Authentication):
         response.set_cookie(value=cookie, **self.cookie)
 
     def logout(self, location='', delete_session=True, user=None):
-        """Disconnection of the current user
+        """Disconnection of the current user.
 
         Mark the user object as expired
 
