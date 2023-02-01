@@ -1,2 +1,2 @@
 [nagare.commands]
-key = nagare.admin.security:Ke
+key = nagare.admin.security:Key
