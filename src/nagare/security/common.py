@@ -183,7 +183,7 @@ class User(object):
         set_user(self._previous_user)
 
     def __repr__(self):
-        return '<User {}>'.format(self.id)
+        return '<{} {}>'.format(self.__class__.__name__, self.id)
 
 
 # ---------------------------------------------------------------------------
