@@ -7,9 +7,9 @@
 # this distribution.
 # --
 
+import os
 import base64
 import codecs
-import os
 
 from nagare.admin import command
 
@@ -19,9 +19,11 @@ class Key(command.Command):
     WITH_CONFIG_FILENAME = False
 
     def set_arguments(self, parser):
-        parser.add_argument('-l', '--length', default=32, type=int, help='key length, in bytes')
-        parser.add_argument('-p', '--prefix', default='')
-        parser.add_argument('-s', '--suffix', default='')
+        parser.add_argument('-l', '--length', default=32, type=int, help='key length, in bytes').completer = (
+            lambda *args, **kw: []
+        )
+        parser.add_argument('-p', '--prefix', default='').completer = lambda *args, **kw: []
+        parser.add_argument('-s', '--suffix', default='').completer = lambda *args, **kw: []
         parser.add_argument(
             '-o',
             '--output',

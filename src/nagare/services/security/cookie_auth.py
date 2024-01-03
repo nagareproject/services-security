@@ -17,12 +17,12 @@ Then the user id and the password are automatically kept into a cookie,
 sent back on each request by the browser.
 """
 
-from base64 import urlsafe_b64decode, urlsafe_b64encode
 import json
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 
-from cryptography.fernet import Fernet, InvalidToken
 from nagare import security
 from webob.exc import HTTPForbidden, HTTPUnauthorized
+from cryptography.fernet import Fernet, InvalidToken
 
 from . import common
 

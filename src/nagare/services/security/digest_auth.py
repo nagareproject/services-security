@@ -9,9 +9,9 @@
 
 """Authentication manager for the digest HTTP authentication scheme."""
 
-import hashlib
 import os
 import time
+import hashlib
 
 from . import token_auth
 

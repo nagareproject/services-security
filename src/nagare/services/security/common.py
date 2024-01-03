@@ -9,7 +9,7 @@
 # this distribution.
 # --
 
-from nagare.security import PermissionsManager, User, get_user, set_manager, set_user
+from nagare.security import User, PermissionsManager, get_user, set_user, set_manager
 from nagare.services import plugin
 
 
