@@ -22,9 +22,9 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 
 from nagare import security
 from webob.exc import HTTPForbidden, HTTPUnauthorized
-from cryptography.fernet import Fernet, InvalidToken
 
 from . import common
+from .fernet import Fernet, InvalidToken
 
 
 class Authentication(common.Authentication):
@@ -62,9 +62,13 @@ class Authentication(common.Authentication):
         """
         super(Authentication, self).__init__(name, dist, cookie=cookie.copy(), key=key, **config)
 
-        self.key = key or Fernet.generate_key()
+        self._key = key
+        self.key = self._key or Fernet.generate_key()
         self.encrypted = cookie.pop('encrypt')
         self.cookie = cookie if cookie.pop('activated') else None
+
+    def handle_start(self, *args, **kw):
+        self.key = self._key or Fernet.generate_key()
 
     def fails(self, body=None, exc=None, **params):
         """Method called when authentication failed.
