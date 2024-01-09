@@ -20,11 +20,12 @@ sent back on each request by the browser.
 import json
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 
-from nagare import security
 from webob.exc import HTTPForbidden, HTTPUnauthorized
 
+from nagare import security
+from nagare.security import fernet
+
 from . import common
-from .fernet import Fernet, InvalidToken
 
 
 class Authentication(common.Authentication):
@@ -63,12 +64,12 @@ class Authentication(common.Authentication):
         super(Authentication, self).__init__(name, dist, cookie=cookie.copy(), key=key, **config)
 
         self._key = key
-        self.key = self._key or Fernet.generate_key()
+        self.key = self._key or fernet.Fernet.generate_key()
         self.encrypted = cookie.pop('encrypt')
         self.cookie = cookie if cookie.pop('activated') else None
 
     def handle_start(self, *args, **kw):
-        self.key = self._key or Fernet.generate_key()
+        self.key = self._key or fernet.Fernet.generate_key()
 
     def fails(self, body=None, exc=None, **params):
         """Method called when authentication failed.
@@ -87,20 +88,20 @@ class Authentication(common.Authentication):
         super(Authentication, self).denies(body, exc or HTTPForbidden, **params)
 
     def encrypt(self, data):
-        return Fernet(self.key).encrypt(data)
+        return fernet.Fernet(self.key).encrypt(data)
 
     def decrypt(self, data, max_age=None):
-        return Fernet(self.key).decrypt(data, max_age)
+        return fernet.Fernet(self.key).decrypt(data, max_age)
 
     def to_cookie(self, principal, **credentials):
         cookie = json.dumps((principal, credentials), separators=(',', ':')).encode('utf-8')
 
-        return self.encrypt(cookie) if self.encrypted else urlsafe_b64encode(cookie)
+        return (self.encrypt if self.encrypted else urlsafe_b64encode)(cookie)
 
     def from_cookie(self, cookie, max_age):
         try:
             cookie = self.decrypt(cookie, max_age) if self.encrypted else urlsafe_b64decode(cookie)
-        except InvalidToken:
+        except fernet.InvalidToken:
             self.logger.debug("Invalid or expired cookie '{}'".format(cookie))
             principal = None
             credentials = {}

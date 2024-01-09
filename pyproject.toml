@@ -53,9 +53,6 @@ Documentation = 'https://nagare.org/doc'
 Source = 'https://github.com/nagareproject/services-security'
 Tracker = 'https://github.com/nagareproject/services-security/issues'
 
-[tool.distutils.bdist_wheel]
-universal = true
-
 [tool.ruff]
 select = ['C4', 'COM', 'D', 'E', 'ERA', 'F', 'I', 'ISC', 'INP', 'PIE', 'Q', 'S', 'TID', 'W', 'YTT']
 ignore = ['COM812', 'D10', 'D401', 'E501', 'ISC001']
@@ -73,7 +70,6 @@ inline-quotes = 'single'
 convention = 'google'
 
 [tool.ruff.isort]
-known-third-party = ['nagare']
 length-sort = true
 
 [tool.ruff.format]
