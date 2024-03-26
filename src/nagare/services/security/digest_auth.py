@@ -43,7 +43,7 @@ class Authentication(token_auth.Authentication):
         In:
           - ``details`` -- a ``security.common.denial`` object
         """
-        nonce = hashlib.md5(b'%r:%s' % (time.time(), self.nonce_seed)).hexdigest()
+        nonce = hashlib.md5(b'%r:%s' % (time.time(), self.nonce_seed)).hexdigest()  # noqa: S324
         headers = (('WWW-Authenticate', 'Digest realm="{}", nonce="{}", qop="auth"'.format(self.realm, nonce)),)
 
         super(Authentication, self).fails(body, exc, headers=headers, **params)
@@ -83,12 +83,12 @@ class Authentication(token_auth.Authentication):
         password = self.get_user_password(principal).encode(encoding)
 
         # Make our side hash
-        hda1 = hashlib.md5(b'%s:%s:%s' % (principal.encode(encoding), realm, password)).hexdigest()
-        hda2 = hashlib.md5(http_method + b':' + uri).hexdigest()
+        hda1 = hashlib.md5(b'%s:%s:%s' % (principal.encode(encoding), realm, password)).hexdigest()  # noqa: S324
+        hda2 = hashlib.md5(http_method + b':' + uri).hexdigest()  # noqa: S324
         sig = b'%s:%s:%s:%s:%s:%s' % (hda1.encode(encoding), nonce, nc, cnonce, qop, hda2.encode(encoding))
 
         # Compare our hash with the response
-        return hashlib.md5(sig).hexdigest().encode(encoding) == response
+        return hashlib.md5(sig).hexdigest().encode(encoding) == response  # noqa: S324
 
     def get_principal(self, request, response, **params):
         """Return the data associated with the connected user.

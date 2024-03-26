@@ -20,7 +20,7 @@ class Authentication(plugin.Plugin, PermissionsManager):
         By definition, the user object ``None`` is the anonymous user
     """
 
-    LOAD_PRIORITY = 102
+    LOAD_PRIORITY = 105  # After transaction service
 
     def authenticate(self, **params):
         if get_user() is not None:
