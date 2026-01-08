@@ -20,6 +20,7 @@ tests:
 qa:
 	python -m ruff check src
 	python -m ruff format --check src
+	$(MAKE) tests
 
 qa-fix:
 	python -m ruff check --fix src

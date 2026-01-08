@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -19,14 +19,13 @@ from . import common
 class Authentication(common.Authentication):
     """Tokens based authentication manager."""
 
-    CONFIG_SPEC = dict(
-        common.Authentication.CONFIG_SPEC, scheme='string(default="Bearer")', base64_encoded='boolean(default=True)'
-    )
+    CONFIG_SPEC = common.Authentication.CONFIG_SPEC | {
+        'scheme': 'string(default="Bearer")',
+        'base64_encoded': 'boolean(default=True)',
+    }
 
     def __init__(self, name, dist, scheme, base64_encoded, services_service, **config):
-        services_service(
-            super(Authentication, self).__init__, name, dist, scheme=scheme, base64_encoded=base64_encoded, **config
-        )
+        services_service(super().__init__, name, dist, scheme=scheme, base64_encoded=base64_encoded, **config)
 
         self.scheme = scheme
         self.base64_encoded = base64_encoded
@@ -37,7 +36,7 @@ class Authentication(common.Authentication):
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        super(Authentication, self).fails(body, exc or HTTPUnauthorized, **params)
+        super().fails(body, exc or HTTPUnauthorized, **params)
 
     def denies(self, body=None, exc=None, **params):
         """Method called when a permission is denied.
@@ -45,7 +44,7 @@ class Authentication(common.Authentication):
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        super(Authentication, self).denies(body, exc or HTTPForbidden, **params)
+        super().denies(body, exc or HTTPForbidden, **params)
 
     def get_principal(self, request, **params):
         """Return the data associated with the connected user.

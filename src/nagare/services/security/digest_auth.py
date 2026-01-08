@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -19,12 +19,11 @@ from . import token_auth
 class Authentication(token_auth.Authentication):
     """Authentication manager for the digest HTTP authentication scheme."""
 
-    CONFIG_SPEC = dict(
-        token_auth.Authentication.CONFIG_SPEC,
-        scheme='string(default="Digest")',
-        base64_encoded='boolean(default=False)',
-        realm='string(default="")',
-    )
+    CONFIG_SPEC = token_auth.Authentication.CONFIG_SPEC | {
+        'scheme': 'string(default="Digest")',
+        'base64_encoded': 'boolean(default=False)',
+        'realm': 'string(default="")',
+    }
 
     def __init__(self, name, dist, realm='', services_service=None, **config):
         """Initialization.
@@ -32,7 +31,7 @@ class Authentication(token_auth.Authentication):
         In:
           - ``realm`` -- authentication realm
         """
-        services_service(super(Authentication, self).__init__, name, dist, realm=realm, **config)
+        services_service(super().__init__, name, dist, realm=realm, **config)
 
         self.realm = realm
         self.nonce_seed = os.urandom(16)
@@ -44,9 +43,9 @@ class Authentication(token_auth.Authentication):
           - ``details`` -- a ``security.common.denial`` object
         """
         nonce = hashlib.md5(b'%r:%s' % (time.time(), self.nonce_seed)).hexdigest()  # noqa: S324
-        headers = (('WWW-Authenticate', 'Digest realm="{}", nonce="{}", qop="auth"'.format(self.realm, nonce)),)
+        headers = (('WWW-Authenticate', f'Digest realm="{self.realm}", nonce="{nonce}", qop="auth"'),)
 
-        super(Authentication, self).fails(body, exc, headers=headers, **params)
+        super().fails(body, exc, headers=headers, **params)
 
     login = fails
 
@@ -100,7 +99,7 @@ class Authentication(token_auth.Authentication):
         Return:
           - A tuple with the id of the user and all the challenge response parameters
         """
-        principal, credentials, response = super(Authentication, self).get_principal(request=request, **params)
+        principal, credentials, response = super().get_principal(request=request, **params)
 
         encoding = request.accept_charset.best_match(['iso-8859-1', 'utf-8'])
 

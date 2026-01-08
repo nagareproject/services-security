@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -32,7 +32,7 @@ class Key(command.Command):
             help='output format',
         )
 
-        super(Key, self).set_arguments(parser)
+        super().set_arguments(parser)
 
     @staticmethod
     def _run(commands_names, length, prefix, suffix, output):

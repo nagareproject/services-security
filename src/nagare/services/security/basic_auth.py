@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -15,9 +15,10 @@ from . import token_auth
 class Authentication(token_auth.Authentication):
     """Authentication manager for the basic HTTP authentication scheme."""
 
-    CONFIG_SPEC = dict(
-        token_auth.Authentication.CONFIG_SPEC, scheme='string(default="Basic")', realm='string(default="")'
-    )
+    CONFIG_SPEC = token_auth.Authentication.CONFIG_SPEC | {
+        'scheme': 'string(default="Basic")',
+        'realm': 'string(default="")',
+    }
 
     def __init__(self, name, dist, realm='', services_service=None, **config):
         """Initialization.
@@ -25,7 +26,7 @@ class Authentication(token_auth.Authentication):
         In:
           - ``realm`` -- authentication realm
         """
-        services_service(super(Authentication, self).__init__, name, dist, realm=realm, **config)
+        services_service(super().__init__, name, dist, realm=realm, **config)
         self.realm = realm
 
     def fails(self, body=None, exc=None, **params):
@@ -35,7 +36,7 @@ class Authentication(token_auth.Authentication):
           - ``details`` -- a ``security.common.denial`` object
         """
         headers = (('WWW-Authenticate', 'Basic realm="{}"'.format(self.realm)),)
-        super(Authentication, self).fails(body, exc, headers=headers, **params)
+        super().fails(body, exc, headers=headers, **params)
 
     login = fails
 
@@ -45,7 +46,7 @@ class Authentication(token_auth.Authentication):
         Return:
           - A list with the id of the user and its password
         """
-        principal, _, response = super(Authentication, self).get_principal(**params)
+        principal, _, response = super().get_principal(**params)
 
         if (principal is not None) and (principal.count(':') == 1):
             principal, password = principal.split(':')

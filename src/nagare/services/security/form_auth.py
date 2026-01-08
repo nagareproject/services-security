@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -25,10 +25,9 @@ from . import cookie_auth
 class Authentication(cookie_auth.Authentication):
     """Simple form based authentication."""
 
-    CONFIG_SPEC = dict(
-        copy.deepcopy(cookie_auth.Authentication.CONFIG_SPEC),
-        prefix='string(default="__ac", help="`_name` and `_password` fields prefix")',
-    )
+    CONFIG_SPEC = copy.deepcopy(cookie_auth.Authentication.CONFIG_SPEC) | {
+        'prefix': 'string(default="__ac", help="`_name` and `_password` fields prefix")'
+    }
 
     def __init__(self, name, dist, prefix='__ac', **config):
         """Initialization.
@@ -42,7 +41,7 @@ class Authentication(cookie_auth.Authentication):
             method of the ``WebOb`` response object
             (see https://docs.pylonsproject.org/projects/webob/en/stable/api/response.html#webob.response.Response.set_cookie)
         """
-        super(Authentication, self).__init__(name, dist, prefix=prefix, **config)
+        super().__init__(name, dist, prefix=prefix, **config)
         self.prefix = prefix
 
     def get_principal_from_params(self, params):
@@ -74,7 +73,7 @@ class Authentication(cookie_auth.Authentication):
         principal, credential, response = self.get_principal_from_params(request.params)
         if principal is None:
             # Second, search into the cookie
-            principal, credential, response = super(Authentication, self).get_principal(request, **params)
+            principal, credential, response = super().get_principal(request, **params)
             if principal is None:
                 credential = {'password': None}
                 response = None

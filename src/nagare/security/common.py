@@ -1,7 +1,5 @@
-# Encoding: utf-8
-
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -20,6 +18,7 @@ __all__ = (
     'set_user',
     'SecurityException',
     'PermissionsManager',
+    'ForbiddenException',
     'has_permissions',
     'check_permissions',
     'permissions',
@@ -35,7 +34,7 @@ __all__ = (
 _marker = object()
 
 
-class PermissionsManager(object):
+class PermissionsManager:
     name = 'default_security_manager'
 
     def fails(self, body=None, exc=None, **params):
@@ -54,7 +53,7 @@ class PermissionsManager(object):
         """
         raise (exc or ForbiddenException)(body, **params)
 
-    def has_permissions(self, user, perms, subject, msg=None):
+    def has_permissions(self, user, perms, subject, msg=None, **kw):
         """The ``has_permission()`` generic method and default implementation: by default all accesses are denied.
 
         In:
@@ -68,7 +67,7 @@ class PermissionsManager(object):
         """
         # If several permissions are to be checked, the access must be granted for at least one permission
         if isinstance(perms, (tuple, list, set)):
-            has_permissions = any(self.has_permissions(user, perm, subject, msg) for perm in perms)
+            has_permissions = any(self.has_permissions(user, perm, subject, msg, **kw) for perm in perms)
         else:
             if perms is public:
                 # Everybody has access to an object protected with the ``public`` permission
@@ -77,7 +76,7 @@ class PermissionsManager(object):
                 # Nobody has access to an object protected with the ``private`` permission
                 has_permissions = False
             else:
-                has_permissions = self.has_permission(user, perms, subject)
+                has_permissions = self.has_permission(user, perms, subject, **kw)
 
         if not has_permissions:
             if msg is None:
@@ -87,14 +86,14 @@ class PermissionsManager(object):
 
         return has_permissions
 
-    def check_permissions(self, user, perms, subject, msg=None, exc=None):
-        has_permissions = self.has_permissions(user, perms, subject, msg)
+    def check_permissions(self, user, perms, subject, msg=None, exc=None, **kw):
+        has_permissions = self.has_permissions(user, perms, subject, msg, **kw)
         if not has_permissions:
             msg = str(has_permissions) if isinstance(has_permissions, Denial) else None
             self.denies(msg, exc)
 
     @staticmethod
-    def has_permission(user, perm, subject):
+    def has_permission(user, perm, subject, **kw):
         return False
 
 
@@ -123,45 +122,51 @@ def set_user(user):
 
 class SecurityException(Exception):
     def __init__(self, body=None):
-        super(SecurityException, self).__init__(body)
+        super().__init__(body)
 
 
 class UnauthorizedException(SecurityException):
     def __init__(self, body=None):
-        super(UnauthorizedException, self).__init__('Authorization failed' if body is None else body)
+        super().__init__('Authorization failed' if body is None else body)
 
 
 class ForbiddenException(SecurityException):
     def __init__(self, body=None):
-        super(ForbiddenException, self).__init__('Access forbidden' if body is None else body)
+        super().__init__('Access forbidden' if body is None else body)
 
 
 # ---------------------------------------------------------------------------
 
 
-def has_permissions(permissions, subject=None, msg=None):
-    return get_manager().has_permissions(get_user(), permissions, subject, msg)
+def has_permissions(permissions, subject=None, msg=None, **kw):
+    return get_manager().has_permissions(get_user(), permissions, subject, msg, **kw)
 
 
-def check_permissions(permissions, subject=None, msg=None, exc=None):
-    get_manager().check_permissions(get_user(), permissions, subject, msg, exc)
+def check_permissions(permissions, subject=None, msg=None, exc=None, **kw):
+    get_manager().check_permissions(get_user(), permissions, subject, msg, exc, **kw)
 
 
-def guarded_call(f, __permissions, __subject, __msg, __exc, *args, **kw):
-    subject = __subject if __subject is not _marker else (args[0] if args else None)
+def guarded_call(f, is_method, permissions, subject, msg, exc, kw, f_args, f_kw):
+    if subject is _marker:
+        subject = f_args[0] if is_method and len(f_args) else None
 
-    check_permissions(__permissions, subject, __msg, __exc)
-    return f(*args, **kw)
+    check_permissions(permissions, subject, msg, exc, **kw)
+    return f(*f_args, **f_kw)
 
 
-def permissions(permissions, subject=_marker, msg=None, exc=None):
-    return lambda f: update_wrapper(lambda *args, **kw: guarded_call(f, permissions, subject, msg, exc, *args, **kw), f)
+def permissions(permissions, subject=_marker, msg=None, exc=None, **kw):
+    return lambda f: update_wrapper(
+        lambda *f_args,
+        __is_method=('.' in f.__qualname__) and ('<locals>' not in f.__qualname__),
+        **f_kw: guarded_call(f, __is_method, permissions, subject, msg, exc, kw, f_args, f_kw),
+        f,
+    )
 
 
 # ---------------------------------------------------------------------------
 
 
-class User(object):
+class User:
     """Base class for the user objects."""
 
     def __init__(self, id=None, **credentials):
@@ -193,7 +198,7 @@ class User(object):
 # So the following pre-defined permissions are optional helpers
 
 
-class Permission(object):
+class Permission:
     """Base class of all the permissions."""
 
 
@@ -223,7 +228,7 @@ private = Private()
 public = Public()
 
 
-class Denial(object):
+class Denial:
     """Type of the objects return when an access is denied.
 
     In a boolean context, it is evaluated to ``False``

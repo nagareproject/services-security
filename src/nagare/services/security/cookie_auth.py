@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -31,10 +31,9 @@ from . import common
 class Authentication(common.Authentication):
     """Simple cookie based authentication."""
 
-    CONFIG_SPEC = dict(
-        common.Authentication.CONFIG_SPEC,
-        key='string(default=None, help="cookie encryption key")',
-        cookie={
+    CONFIG_SPEC = common.Authentication.CONFIG_SPEC | {
+        'key': 'string(default=None, help="cookie encryption key")',
+        'cookie': {
             'activated': 'boolean(default=True)',
             'encrypt': 'boolean(default=True)',
             'name': 'string(default="nagare-security")',
@@ -47,7 +46,7 @@ class Authentication(common.Authentication):
             'overwrite': 'boolean(default=False)',
             'samesite': 'string(default="lax")',
         },
-    )
+    }
 
     def __init__(self, name, dist, cookie, key=None, **config):
         """Initialization.
@@ -61,7 +60,12 @@ class Authentication(common.Authentication):
             method of the ``WebOb`` response object
             (see https://docs.pylonsproject.org/projects/webob/en/stable/api/response.html#webob.response.Response.set_cookie)
         """
-        super(Authentication, self).__init__(name, dist, cookie=cookie.copy(), key=key, **config)
+        super().__init__(name, dist, cookie=cookie.copy(), key=key, **config)
+
+        if not cookie['encrypt'] and not cookie['secure']:
+            self.logger.warning(
+                'Insecure combinaison of values for parameters `[[cookie]] / encrypt` and `[[cookie]] / secure`'
+            )
 
         self._key = key
         self.key = self._key or fernet.Fernet.generate_key()
@@ -77,7 +81,7 @@ class Authentication(common.Authentication):
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        super(Authentication, self).fails(body, exc or HTTPUnauthorized, **params)
+        super().fails(body, exc or HTTPUnauthorized, **params)
 
     def denies(self, body=None, exc=None, **params):
         """Method called when a permission is denied.
@@ -85,7 +89,7 @@ class Authentication(common.Authentication):
         In:
           - ``detail`` -- a ``security.common.denial`` object
         """
-        super(Authentication, self).denies(body, exc or HTTPForbidden, **params)
+        super().denies(body, exc or HTTPForbidden, **params)
 
     def encrypt(self, data):
         return fernet.Fernet(self.key).encrypt(data)
@@ -102,7 +106,7 @@ class Authentication(common.Authentication):
         try:
             cookie = self.decrypt(cookie, max_age) if self.encrypted else urlsafe_b64decode(cookie)
         except fernet.InvalidToken:
-            self.logger.debug("Invalid or expired cookie '{}'".format(cookie))
+            self.logger.debug(f"Invalid or expired cookie '{cookie}'")
             principal = None
             credentials = {}
         else:
@@ -128,7 +132,7 @@ class Authentication(common.Authentication):
                 try:
                     principal, credential = self.from_cookie(data.encode('utf-8'), self.cookie['max_age'])
                 except Exception as e:
-                    self.logger.error('Cookie decoding: {}'.format(e))
+                    self.logger.error(f'Cookie decoding: {e}')
 
         return principal, credential, None
 
