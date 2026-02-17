@@ -7,7 +7,7 @@
 # this distribution.
 # --
 
-from nagare.security import User, PermissionsManager, get_user, set_user, set_manager
+from nagare.security import User, PermissionsManager, get_user, set_user, add_manager, set_manager
 from nagare.services import plugin
 
 
@@ -19,6 +19,10 @@ class Authentication(plugin.Plugin, PermissionsManager):
     """
 
     LOAD_PRIORITY = 105  # After transaction service
+
+    def __init__(self, name, dist, **config):
+        super().__init__(name, dist, **config)
+        add_manager(name, self)
 
     def authenticate(self, **params):
         if get_user() is not None:

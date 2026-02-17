@@ -12,6 +12,8 @@ from functools import update_wrapper
 from nagare import local
 
 __all__ = (
+    'add_manager',
+    'get_managers',
     'get_manager',
     'set_manager',
     'get_user',
@@ -32,6 +34,7 @@ __all__ = (
 )
 
 _marker = object()
+managers = {}
 
 
 class PermissionsManager:
@@ -100,6 +103,14 @@ class PermissionsManager:
 # ---------------------------------------------------------------------------
 
 
+def add_manager(name, manager):
+    managers[name] = manager
+
+
+def get_managers():
+    return managers
+
+
 def get_manager():
     return getattr(local.request, 'manager', PermissionsManager())
 
@@ -156,9 +167,9 @@ def guarded_call(f, is_method, permissions, subject, msg, exc, kw, f_args, f_kw)
 
 def permissions(permissions, subject=_marker, msg=None, exc=None, **kw):
     return lambda f: update_wrapper(
-        lambda *f_args,
-        __is_method=('.' in f.__qualname__) and ('<locals>' not in f.__qualname__),
-        **f_kw: guarded_call(f, __is_method, permissions, subject, msg, exc, kw, f_args, f_kw),
+        lambda *f_args, __is_method=('.' in f.__qualname__) and ('<locals>' not in f.__qualname__), **f_kw: (
+            guarded_call(f, __is_method, permissions, subject, msg, exc, kw, f_args, f_kw)
+        ),
         f,
     )
 
